@@ -367,8 +367,8 @@ func TestMigrationsPG(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 22 {
-		t.Fatalf("expected 22 migrations in migrations_pg, got %d", len(entries))
+	if len(entries) != 23 {
+		t.Fatalf("expected 23 migrations in migrations_pg, got %d", len(entries))
 	}
 
 	sqliteEntries, err := fs.ReadDir(Migrations(), ".")

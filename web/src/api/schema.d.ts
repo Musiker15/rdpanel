@@ -2450,6 +2450,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/relays/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live relayed sessions of every relay that can report them, with the devices last seen at each peer IP (admin).
+         * @description Runs hbbr `usage` on the local relay and on every connected agent. Static relays and disconnected agents have no live data and are listed under `unavailable`. Direct (P2P) connections never pass a relay and do not appear, and hbbr lists one endpoint of each session only. The device labels match the peer IP against each device's recent heartbeat address, so devices behind one NAT share them.
+         */
+        get: operations["getRelaySessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/relays/options": {
         parameters: {
             query?: never;
@@ -4687,6 +4707,38 @@ export interface components {
             highest_kbps: number;
             avg_kbps: number;
             current_kbps: number;
+            /** @description Up to 5 devices whose last heartbeat came from the peer's IP within the last 10 minutes, most recent first. A hint, not an identification (shared NAT addresses). */
+            devices: components["schemas"]["RelayDeviceRef"][];
+            /** @description All devices matching the peer's IP */
+            devices_total: number;
+        };
+        RelayDeviceRef: {
+            /** Format: int64 */
+            id: number;
+            rustdesk_id: string;
+            /** @description Alias, else hostname, else RustDesk ID. */
+            label: string;
+        };
+        RelaySession: components["schemas"]["RelayUsage"] & {
+            /** Format: int64 */
+            relay_id: number;
+            relay_name: string;
+            relay_kind: components["schemas"]["RelayKind"];
+            /** @description Public host[:port] clients connect to. */
+            relay_host: string;
+        };
+        RelaySessionsUnavailable: {
+            /** Format: int64 */
+            relay_id: number;
+            relay_name: string;
+            relay_kind: components["schemas"]["RelayKind"];
+            relay_host: string;
+            /**
+             * @description no_live_usage: static relay or disconnected agent.
+             * @enum {string}
+             */
+            reason: "no_live_usage" | "error";
+            error?: string;
         };
         RelayTrafficSummary: {
             /** Format: int64 */
@@ -10107,6 +10159,34 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getRelaySessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions per relay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: date-time */
+                        checked_at: string;
+                        items: components["schemas"]["RelaySession"][];
+                        unavailable: components["schemas"]["RelaySessionsUnavailable"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            503: components["responses"]["Unavailable"];
         };
     };
     getRelayOptions: {

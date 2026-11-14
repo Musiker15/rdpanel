@@ -306,6 +306,61 @@ func (r *Devices) List(ctx context.Context, p ListDevicesParams) ([]*Device, int
 	return out, total, mapErr(rows.Err())
 }
 
+// DevicesAtIP is what ListByLastSeenIPs found for one address.
+type DevicesAtIP struct {
+	// Devices are the most recently seen matches, at most perIP of them.
+	Devices []*Device
+	// Total counts every match, including the ones beyond perIP.
+	Total int
+}
+
+// ListByLastSeenIPs returns, keyed by address, the devices whose last
+// heartbeat came from one of ips (exact match on last_seen_ip) at or after
+// since: the perIP with the latest heartbeat and the total count. It filters
+// on last_heartbeat_at, written together with last_seen_ip; last_seen_at also
+// moves with hbbs presence and says nothing about the address. The address
+// alone does not identify a device (devices behind one NAT share it, and a
+// dynamic IP moves on), hence the cut-off and the cap.
+func (r *Devices) ListByLastSeenIPs(ctx context.Context, ips []string, since time.Time, perIP int) (map[string]DevicesAtIP, error) {
+	out := map[string]DevicesAtIP{}
+	if len(ips) == 0 || perIP <= 0 {
+		return out, nil
+	}
+	args := make([]any, 0, len(ips)+2)
+	for _, ip := range ips {
+		args = append(args, ip)
+	}
+	in := strings.TrimSuffix(strings.Repeat("?, ", len(ips)), ", ")
+	rows, err := r.q.QueryContext(ctx, `SELECT * FROM (SELECT `+deviceColumns+`,
+			ROW_NUMBER() OVER (PARTITION BY d.last_seen_ip ORDER BY d.last_heartbeat_at DESC, d.id) AS ip_rank,
+			COUNT(*) OVER (PARTITION BY d.last_seen_ip) AS ip_total`+deviceFrom+`
+		WHERE d.last_seen_ip IN (`+in+`) AND d.last_heartbeat_at >= ?) ranked
+		WHERE ip_rank <= ? ORDER BY ip_rank`, append(args, toMs(since), perIP)...)
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var rank, total int
+		d, err := scanDevice(extraScan{rows, []any{&rank, &total}})
+		if err != nil {
+			return nil, err
+		}
+		at := out[d.LastSeenIP]
+		at.Devices, at.Total = append(at.Devices, d), total
+		out[d.LastSeenIP] = at
+	}
+	return out, mapErr(rows.Err())
+}
+
+// extraScan appends dest columns after the ones a scan helper reads.
+type extraScan struct {
+	row   interface{ Scan(...any) error }
+	extra []any
+}
+
+func (e extraScan) Scan(dest ...any) error { return e.row.Scan(append(dest, e.extra...)...) }
+
 func nullBytes(b []byte) any {
 	if len(b) == 0 {
 		return nil

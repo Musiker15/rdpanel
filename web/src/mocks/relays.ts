@@ -6,7 +6,7 @@
 import { http, HttpResponse } from "msw";
 
 import type { Schemas } from "@/api/client";
-import { iso } from "@/mocks/data";
+import { devices, iso } from "@/mocks/data";
 
 type S = Schemas;
 const B = "/api/v1/admin";
@@ -77,6 +77,33 @@ function relay(over: Partial<S["Relay"]> & Pick<S["Relay"], "id" | "name" | "kin
     agent: null,
     ...over,
   };
+}
+
+/** Devices whose last heartbeat came from the IP of an hbbr peer ("ip:port", "[v6]:port"). */
+export function mockRelayDevices(peer: string): S["RelayDeviceRef"][] {
+  const ip = peer.replace(/:\d+$/, "").replace(/^\[|\]$/g, "");
+  return devices
+    .filter((d) => d.last_seen_ip === ip)
+    .map((d) => ({ id: d.id, rustdesk_id: d.rustdesk_id, label: d.alias || d.hostname || d.rustdesk_id }));
+}
+
+/** Live hbbr usage of one relay: two peers at known device IPs, one unknown. */
+export function mockUsage(seed: number): S["RelayUsage"][] {
+  const t = Date.now() / 1000;
+  const at = (i: number) => devices[(seed * 7 + i) % devices.length]!.last_seen_ip ?? "10.0.0.1";
+  const rows = [
+    { peer: `${at(0)}:51234`, elapsed_s: 312 + Math.floor(t % 60), total_mb: 85.2, highest_kbps: 9830, avg_kbps: 2185, current_kbps: 1500 + Math.round(Math.sin(t) * 400) },
+    { peer: `${at(3)}:40022`, elapsed_s: 1460, total_mb: 41.7, highest_kbps: 4410, avg_kbps: 228, current_kbps: 96 },
+    { peer: "46.39.12.201:61007", elapsed_s: 75, total_mb: 3.1, highest_kbps: 1220, avg_kbps: 330, current_kbps: 410 },
+  ];
+  return rows.map((r) => {
+    const devices = mockRelayDevices(r.peer);
+    return { ...r, devices: devices.slice(0, 5), devices_total: devices.length };
+  });
+}
+
+function hasLiveUsage(r: S["Relay"]): boolean {
+  return r.kind === "local" || (r.kind === "agent" && !!r.agent?.connected);
 }
 
 export const relays: S["Relay"][] = [
@@ -401,15 +428,18 @@ export const relayHandlers = [
   }),
   http.get(`${B}/relays/:id/usage`, ({ params }) => {
     const r = find(params.id);
-    if (!r || (r.kind === "agent" && !r.agent?.connected) || r.kind === "static") return err(503, "server_unavailable", "live usage is not available");
-    const t = Date.now() / 1000;
-    return ok({
-      checked_at: nowIso(),
-      items: [
-        { peer: "185.12.40.11:51234", elapsed_s: 312, total_mb: 85.2, highest_kbps: 9830, avg_kbps: 2185, current_kbps: 1500 + Math.round(Math.sin(t) * 400) },
-        { peer: "91.203.7.88:40022", elapsed_s: 1460, total_mb: 41.7, highest_kbps: 4410, avg_kbps: 228, current_kbps: 96 },
-      ],
-    });
+    if (!r || !hasLiveUsage(r)) return err(503, "server_unavailable", "live usage is not available");
+    return ok({ checked_at: nowIso(), items: mockUsage(r.id) });
+  }),
+  http.get(`${B}/relays/sessions`, () => {
+    const items: S["RelaySession"][] = [];
+    const unavailable: S["RelaySessionsUnavailable"][] = [];
+    for (const r of relays) {
+      const ref = { relay_id: r.id, relay_name: r.name, relay_kind: r.kind, relay_host: r.public_host };
+      if (!hasLiveUsage(r)) unavailable.push({ ...ref, reason: "no_live_usage" });
+      else for (const u of mockUsage(r.id)) items.push({ ...ref, ...u });
+    }
+    return ok({ checked_at: nowIso(), items, unavailable });
   }),
   http.get(`${B}/relays/:id/traffic`, ({ params, request }) => {
     const r = find(params.id);

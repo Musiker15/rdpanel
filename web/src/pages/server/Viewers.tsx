@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/misc";
 import { formatNumber } from "@/lib/format";
 import { useTableSearch } from "@/lib/use-table";
+import { RelayPeer } from "@/pages/server/RelayPeer";
 
 function Refresh({ onClick, spinning }: { onClick: () => void; spinning: boolean }) {
   const { t } = useTranslation();
@@ -226,7 +227,7 @@ function RelayUsage() {
   const q = useQuery({ queryKey: ["server", "relay-usage"], queryFn: serverApi.relayUsage, refetchInterval: 10_000 });
   const columns = useMemo<ColumnDef<Schemas["RelayUsage"], unknown>[]>(
     () => [
-      { id: "peer", header: t("server.peer"), enableSorting: false, meta: { label: t("server.peer") } satisfies ColumnMeta, cell: ({ row }) => <Mono>{row.original.peer}</Mono> },
+      { id: "peer", header: t("server.peer"), enableSorting: false, meta: { label: t("server.peer") } satisfies ColumnMeta, cell: ({ row }) => <RelayPeer peer={row.original.peer} devices={row.original.devices} total={row.original.devices_total} /> },
       {
         id: "elapsed",
         header: t("server.elapsed"),
