@@ -53,7 +53,7 @@ describe("locales", () => {
         return acc;
       }, {});
     const e = flat(en as Tree);
-    const r = flat(ru as Tree);
+    const r = flat(tree);
     for (const [k, v] of Object.entries(r)) {
       const enValue = e[k] ?? e[k.replace(PLURAL, "_other")];
       if (enValue === undefined) continue;
