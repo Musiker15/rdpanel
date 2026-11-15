@@ -2,58 +2,67 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Colours follow the RustDesk desktop client (flutter/lib/common.dart, MyTheme),
+ * so the panel looks like the app its users already know:
+ *   accent #0071FF, light: white page, grayBg #EFEFF2, hover #E0E0E0,
+ *   border #CCCCCC; dark: page #18191E, cards #24252B, hover #2D2E35,
+ *   highlight #3F3F3F, secondary text #949494.
+ * Text colours that would miss WCAG AA contrast (RustDesk's #AAAAAA hint
+ * on white) stay darker; destructive keeps the shadcn reds for the same reason.
+ */
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --foreground: 0 0% 13%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 0 0% 13%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 221 83% 53%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --popover-foreground: 0 0% 13%;
+    --primary: 213 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 10% 94%;
+    --secondary-foreground: 0 0% 13%;
+    --muted: 240 10% 94%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 0 0% 88%;
+    --accent-foreground: 0 0% 13%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 221 83% 53%;
+    --border: 0 0% 80%;
+    --input: 0 0% 80%;
+    --ring: 213 100% 50%;
     --radius: 0.5rem;
-    --sidebar: 240 4.8% 97.5%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-border: 240 5.9% 90%;
-    --sidebar-accent: 240 4.8% 92%;
+    --sidebar: 240 10% 94%;
+    --sidebar-foreground: 0 0% 20%;
+    --sidebar-border: 0 0% 80%;
+    --sidebar-accent: 0 0% 88%;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
+    --background: 230 11% 11%;
     --foreground: 0 0% 98%;
-    --card: 240 10% 5.5%;
+    --card: 231 9% 15.5%;
     --card-foreground: 0 0% 98%;
-    --popover: 240 10% 5.5%;
+    --popover: 231 9% 15.5%;
     --popover-foreground: 0 0% 98%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 240 10% 3.9%;
-    --secondary: 240 3.7% 15.9%;
+    --primary: 213 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 232 8% 19%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
+    --muted: 232 8% 19%;
+    --muted-foreground: 0 0% 58%;
+    --accent: 0 0% 25%;
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 50.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 217 91% 60%;
-    --sidebar: 240 10% 5.5%;
-    --sidebar-foreground: 240 4.8% 85%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-accent: 240 3.7% 15.9%;
+    --border: 0 0% 25%;
+    --input: 0 0% 25%;
+    --ring: 213 100% 50%;
+    --sidebar: 231 9% 15.5%;
+    --sidebar-foreground: 0 0% 85%;
+    --sidebar-border: 0 0% 25%;
+    --sidebar-accent: 232 8% 19%;
   }
 
   * {
