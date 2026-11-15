@@ -55,6 +55,7 @@ func (c *b2bCore) registerRelays(r chi.Router) {
 		r.Get("/relays", c.handleListRelays)
 		r.Post("/relays", c.handleCreateRelay)
 		r.Get("/relays/rotation", c.handleRelayRotation)
+		r.Get("/relays/sessions", c.handleRelaySessions)
 		r.Get("/relays/options", c.handleGetRelayOptions)
 		r.Put("/relays/options", c.handlePutRelayOptions)
 		r.Get("/relays/prefix-rules", c.handleListPrefixRules)
@@ -572,12 +573,7 @@ func (c *b2bCore) handleRelayUsageByID(w http.ResponseWriter, r *http.Request) {
 		unavailable(w, err.Error())
 		return
 	}
-	out := make([]relayUsageDTO, 0, len(usage))
-	for _, u := range usage {
-		out = append(out, relayUsageDTO{Peer: u.Addr, ElapsedS: int64(u.Elapsed / time.Second), TotalMB: u.TotalMB,
-			HighestKbps: float64(u.HighestKbps), AvgKbps: float64(u.AvgKbps), CurrentKbps: float64(u.CurrentKbps)})
-	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"checked_at": c.d.Store.Now().UTC(), "items": out})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"checked_at": c.d.Store.Now().UTC(), "items": c.relayUsageDTOs(r.Context(), usage)})
 }
 
 func (c *b2bCore) handleGetRelayOptions(w http.ResponseWriter, r *http.Request) {

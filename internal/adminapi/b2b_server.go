@@ -630,6 +630,10 @@ type relayUsageDTO struct {
 	HighestKbps float64 `json:"highest_kbps"`
 	AvgKbps     float64 `json:"avg_kbps"`
 	CurrentKbps float64 `json:"current_kbps"`
+	// Devices recently seen at the peer's IP (labels, not an identification),
+	// at most devicesPerPeer; DevicesTotal counts all of them.
+	Devices      []relayDeviceDTO `json:"devices"`
+	DevicesTotal int              `json:"devices_total"`
 }
 
 func (c *b2bCore) handleRelayUsage(w http.ResponseWriter, r *http.Request) {
@@ -641,12 +645,7 @@ func (c *b2bCore) handleRelayUsage(w http.ResponseWriter, r *http.Request) {
 		c.controlErr(w, r, err)
 		return
 	}
-	out := make([]relayUsageDTO, 0, len(usage))
-	for _, u := range usage {
-		out = append(out, relayUsageDTO{Peer: u.Addr, ElapsedS: int64(u.Elapsed / time.Second), TotalMB: u.TotalMB,
-			HighestKbps: float64(u.HighestKbps), AvgKbps: float64(u.AvgKbps), CurrentKbps: float64(u.CurrentKbps)})
-	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"checked_at": c.d.Store.Now().UTC(), "items": out})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"checked_at": c.d.Store.Now().UTC(), "items": c.relayUsageDTOs(r.Context(), usage)})
 }
 
 // ---- console ----

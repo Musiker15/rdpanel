@@ -347,6 +347,9 @@
     "sysinfo": "System",
     "recentConnections": "Recent connections",
     "noConnections": "No connections recorded.",
+    "relaySessions": "Relay sessions",
+    "relaySessionsEmpty": "No relayed session seen from this device's address. hbbr reports one endpoint of each session only, and direct (P2P) connections do not pass a relay.",
+    "relaySessionsShared": "Matched by IP address: other devices behind the same address are listed with the session.",
     "inBooks": "In address books",
     "searchPlaceholder": "Search ID, name, IP…",
     "seenWithin": "Seen",
@@ -1503,6 +1506,19 @@
       "stepAutoApproved": "Approved (no approval gate)",
       "stepConnected": "Agent connected",
       "stepProbe": "End-to-end probe passed"
+    },
+    "live": {
+      "title": "Active relay sessions",
+      "hint": "Relayed sessions on all relays right now. hbbr reports one endpoint of each session; direct (P2P) connections do not pass a relay and are not listed.",
+      "empty": "No relayed sessions right now",
+      "peer": "Peer",
+      "relay": "Relay",
+      "unavailable": "No live data from: {{relays}}",
+      "reason": {
+        "no_live_usage": "no live data",
+        "error": "error"
+      },
+      "devicesHint": "Devices seen at this IP in the last 10 minutes. Devices behind one NAT share an address."
     },
     "drawer": {
       "settings": "Relay",
