@@ -62,8 +62,9 @@ env:
   # AUTHZ_URL hook, a controller's control_permissions never forwarded;
   # f8f2fdc opt-in WS_KEY_EXCHANGE, the signed key exchange on WebSocket too;
   # 0eff6c0 upstream's November 2026 hardening merged; 10c1668 opt-in
-  # KEY_EXCHANGE_V1 for RustDesk 1.5.x clients).
-  SERVER_REF: ${{ inputs.server_ref || '10c16681b97341483681cd72d1e7585866ef5811' }}
+  # KEY_EXCHANGE_V1 for RustDesk 1.5.x clients; 99ee4e3 warns when MUST_LOGIN
+  # runs without a JWT key).
+  SERVER_REF: ${{ inputs.server_ref || '99ee4e3cd74c944754f6f3300528dc44d950b119' }}
 
 jobs:
   hbb:
