@@ -63,8 +63,9 @@ env:
   # f8f2fdc opt-in WS_KEY_EXCHANGE, the signed key exchange on WebSocket too;
   # 0eff6c0 upstream's November 2026 hardening merged; 10c1668 opt-in
   # KEY_EXCHANGE_V1 for RustDesk 1.5.x clients; 99ee4e3 warns when MUST_LOGIN
-  # runs without a JWT key; 2063e25 an oversized token no longer skips AUTHZ).
-  SERVER_REF: ${{ inputs.server_ref || '2063e2508ae2c5c0256d6c38204c6df5d9077e2d' }}
+  # runs without a JWT key; 2063e25 an oversized token no longer skips AUTHZ;
+  # 3bc9b96 bounded authorization calls in flight).
+  SERVER_REF: ${{ inputs.server_ref || '23b46a639f7bc0389e5208ae528b2a7f750ff4b6' }}
 
 jobs:
   hbb:
