@@ -21,8 +21,10 @@ import (
 // /api: it is not part of the admin API contract).
 const Path = "/internal/hbbs/authorize"
 
-// MaxBody bounds the request body.
-const MaxBody = 4 << 10
+// MaxBody bounds the request body. hbbs sends tokens of up to 4096 bytes, which
+// JSON escaping can make six times longer; hbbs refuses an attempt this rejects
+// with 413.
+const MaxBody = 32 << 10
 
 // decideTimeout bounds one decision; hbbs proceeds without permissions
 // when the panel does not answer in time anyway.
