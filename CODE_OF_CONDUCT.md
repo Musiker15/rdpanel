@@ -14,7 +14,7 @@ without their permission are not accepted anywhere in this project.
 
 ## Where it applies
 
-In this repository (issues, pull requests, discussions, reviews) and wherever someone acts
+In this repository (issues, pull requests, reviews) and wherever someone acts
 on behalf of the project.
 
 ## Reporting

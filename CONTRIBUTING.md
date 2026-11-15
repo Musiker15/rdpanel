@@ -83,5 +83,5 @@ have their own texts per language.
 - Keep a pull request to one topic and link the issue it closes.
 - Say how you tested it. For UI changes, screenshots in light and dark help a lot.
 
-By contributing you agree that your contribution is licensed like the part of the project
-it touches: MIT for the panel (see [LICENSE](LICENSE)).
+By contributing you agree that your contribution is licensed under the MIT licence of this
+repository (see [LICENSE](LICENSE)).
