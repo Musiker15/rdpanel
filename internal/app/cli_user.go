@@ -126,6 +126,12 @@ func cmdUserResetPassword(ctx context.Context, args []string, env config.LookupF
 		if revoked, err = tx.AuthTokens.RevokeForUser(ctx, u.ID, "", "password reset"); err != nil {
 			return err
 		}
+		// API tokens too: a reset is how a taken-over account is recovered.
+		n, err := tx.APITokens.RevokeForUser(ctx, u.ID)
+		if err != nil {
+			return err
+		}
+		revoked += n
 		return tx.AdminAudit.Record(ctx, &store.AuditEntry{ActorName: cliActor, Action: "user.reset_password",
 			TargetType: "user", TargetID: strconv.FormatInt(u.ID, 10),
 			Details: map[string]any{"username": u.Username, "revoked_tokens": revoked}})

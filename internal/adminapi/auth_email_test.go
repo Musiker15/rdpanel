@@ -255,6 +255,7 @@ func TestPasswordResetByEmail(t *testing.T) {
 	if code, _ := old.login("alice", "old-password"); code != 200 {
 		t.Fatal("login")
 	}
+	apiTok, _ := old.mint("intruder", "write", nil)
 	before := len(srv.Messages())
 
 	anon := e.client()
@@ -286,6 +287,9 @@ func TestPasswordResetByEmail(t *testing.T) {
 	}
 	if code, _, _ := old.do(http.MethodGet, "/auth/me", nil); code != 401 {
 		t.Fatalf("old session survived the reset: %d", code)
+	}
+	if code, _ := e.bearer(http.MethodGet, "/auth/me", apiTok, nil); code != 401 {
+		t.Fatalf("API token survived the reset: %d", code)
 	}
 	if code, _ := e.client().login("alice", "brand-new-password"); code != 200 {
 		t.Fatalf("login with new password: %d", code)
