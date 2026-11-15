@@ -5262,6 +5262,11 @@ components:
         public_key: { type: string, description: "Server public key; empty when unreadable" }
         config_string: { type: string, description: "RustDesk config string (--config, import, QR code as config=…)" }
         windows_file_name: { type: string, description: "Installer name carrying the settings; absent when they do not fit" }
+        ice_servers:
+          type: string
+          description: |
+            ICE servers (comma-separated) to set at install time with `--option ice-servers`; present only
+            when an admin turned on Client options → `ice_servers_in_install` and saved a list.
         assets:
           type: array
           items: { $ref: "#/components/schemas/ClientAsset" }
@@ -5963,7 +5968,7 @@ components:
           description: Base64-encoded configuration string with resolved IP addresses.
     ClientOptions:
       type: object
-      required: [ice_servers, webrtc_congestion_control, pushed, modified_at]
+      required: [ice_servers, webrtc_congestion_control, ice_servers_in_install, devices_ignoring_ice, pushed, modified_at]
       description: |
         RustDesk client options pushed to every device in heartbeat responses (strategy `config_options`).
         Nothing is pushed until they are saved once; after that every key is pushed, an empty value removing
@@ -5977,6 +5982,16 @@ components:
         webrtc_congestion_control:
           type: [boolean, "null"]
           description: "`allow-webrtc-congestion-control`; null = client default."
+        ice_servers_in_install:
+          type: boolean
+          description: |
+            Add the ICE servers to the install commands of My → Install client
+            (`rustdesk --option ice-servers …`). RustDesk 1.5.3 and later ignore `ice-servers` sent in
+            heartbeats, so installing is the only way the panel still sets it there. Off by default: TURN
+            entries carry credentials and that page is open to every signed-in user.
+        devices_ignoring_ice:
+          type: integer
+          description: Devices whose last reported RustDesk version (1.5.3 or later) ignores `ice-servers` from heartbeats.
         pushed: { type: boolean, description: True once saved (clients receive the keys). }
         modified_at: { type: [string, "null"], format: date-time, description: Version clients echo back. }
     ClientOptionsInput:
@@ -5988,6 +6003,7 @@ components:
           maxLength: 16384
           description: stun:, stuns:, turn:// or turns:// URLs separated by commas or newlines (at most 16).
         webrtc_congestion_control: { type: [boolean, "null"] }
+        ice_servers_in_install: { type: boolean, description: Omit to keep the saved value. }
     IceServerProbeItem:
       type: object
       required: [server, scheme, reachable]

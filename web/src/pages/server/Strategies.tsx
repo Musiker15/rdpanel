@@ -26,6 +26,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton, Switch, Textarea } from "@/components/ui/misc";
+import { ignoredStrategyKeys } from "@/lib/strategyOptions";
 
 const TEMPLATES: Record<string, { name: string; note: string; options: Record<string, string> }> = {
   standard: {
@@ -461,6 +462,7 @@ export function StrategiesTab() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {items.map((strat) => {
             const opts = strat.config_options || {};
+            const ignored = ignoredStrategyKeys(opts);
             return (
               <Card key={strat.id} className={strat.is_default ? "border-primary/50 shadow-sm" : undefined}>
                 <CardHeader className="pb-3">
@@ -477,6 +479,11 @@ export function StrategiesTab() {
                         <Badge variant="secondary" className="text-xs">
                           {t("strategies.devicesCount", { count: strat.device_count })}
                         </Badge>
+                        {ignored.length > 0 && (
+                          <Badge variant="outline" className="text-xs font-normal" title={t("strategies.ignored153Hint", { keys: ignored.join(", ") })}>
+                            {t("strategies.ignored153", { count: ignored.length })}
+                          </Badge>
+                        )}
                       </div>
                       {strat.note && <CardDescription className="text-xs line-clamp-2">{strat.note}</CardDescription>}
                     </div>

@@ -127,3 +127,48 @@ func TestClientOptionsFetchSTUN(t *testing.T) {
 		t.Fatalf("expected no working items, got %v", m)
 	}
 }
+
+// RustDesk 1.5.3 ignores ice-servers from heartbeats: the options report how
+// many devices that affects, and an opt-in hands the list to the install
+// commands of /clients (signed-in users only, never by default).
+func TestClientOptionsICEForInstall(t *testing.T) {
+	e := newB2Env(t, b2opts{})
+	admin, _ := e.as("root", store.RoleAdmin)
+	user, _ := e.as("bob", store.RoleUser)
+	for id, v := range map[string]string{"111": "1.4.9", "222": "1.5.3", "333": "1.6.0", "444": ""} {
+		if err := e.st.Devices.Create(e.ctx, &store.Device{RustdeskID: id, ClientVersion: v}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ice := "stun:stun.example.com:3478\nturn://u:turn-secret@turn.example.com:3478"
+
+	code, m, _ := admin.do(http.MethodPut, "/server/client-options", map[string]any{"ice_servers": ice})
+	want(t, "put", code, 200, m)
+	if m["ice_servers_in_install"] != false || b2bNum(m["devices_ignoring_ice"]) != 2 {
+		t.Fatalf("default off, 2 devices on 1.5.3+: %v", m)
+	}
+	if _, m, _ := user.do(http.MethodGet, "/clients", nil); m["ice_servers"] != nil {
+		t.Fatalf("ICE servers in /clients while off: %v", m["ice_servers"])
+	}
+
+	code, m, _ = admin.do(http.MethodPut, "/server/client-options", map[string]any{"ice_servers": ice, "ice_servers_in_install": true})
+	want(t, "opt in", code, 200, m)
+	if m["ice_servers_in_install"] != true {
+		t.Fatalf("opt in: %v", m)
+	}
+	if _, m, _ := user.do(http.MethodGet, "/clients", nil); m["ice_servers"] != "stun:stun.example.com:3478,turn://u:turn-secret@turn.example.com:3478" {
+		t.Fatalf("ICE servers in /clients: %v", m["ice_servers"])
+	}
+
+	// A PUT without the field keeps it; false turns it off again.
+	code, m, _ = admin.do(http.MethodPut, "/server/client-options", map[string]any{"ice_servers": ice, "webrtc_congestion_control": true})
+	want(t, "keep", code, 200, m)
+	if m["ice_servers_in_install"] != true {
+		t.Fatalf("omitted field reset the opt-in: %v", m)
+	}
+	code, m, _ = admin.do(http.MethodPut, "/server/client-options", map[string]any{"ice_servers": ice, "ice_servers_in_install": false})
+	want(t, "opt out", code, 200, m)
+	if _, m, _ := user.do(http.MethodGet, "/clients", nil); m["ice_servers"] != nil {
+		t.Fatalf("ICE servers in /clients after opting out: %v", m["ice_servers"])
+	}
+}

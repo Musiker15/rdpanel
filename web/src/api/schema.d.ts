@@ -3870,6 +3870,11 @@ export interface components {
             config_string: string;
             /** @description Installer name carrying the settings; absent when they do not fit */
             windows_file_name?: string;
+            /**
+             * @description ICE servers (comma-separated) to set at install time with `--option ice-servers`; present only
+             *     when an admin turned on Client options → `ice_servers_in_install` and saved a list.
+             */
+            ice_servers?: string;
             assets: components["schemas"]["ClientAsset"][];
         };
         ClientAsset: {
@@ -4526,6 +4531,15 @@ export interface components {
             ice_servers: string;
             /** @description `allow-webrtc-congestion-control`; null = client default. */
             webrtc_congestion_control: boolean | null;
+            /**
+             * @description Add the ICE servers to the install commands of My → Install client
+             *     (`rustdesk --option ice-servers …`). RustDesk 1.5.3 and later ignore `ice-servers` sent in
+             *     heartbeats, so installing is the only way the panel still sets it there. Off by default: TURN
+             *     entries carry credentials and that page is open to every signed-in user.
+             */
+            ice_servers_in_install: boolean;
+            /** @description Devices whose last reported RustDesk version (1.5.3 or later) ignores `ice-servers` from heartbeats. */
+            devices_ignoring_ice: number;
             /** @description True once saved (clients receive the keys). */
             pushed: boolean;
             /**
@@ -4538,6 +4552,8 @@ export interface components {
             /** @description stun:, stuns:, turn:// or turns:// URLs separated by commas or newlines (at most 16). */
             ice_servers?: string;
             webrtc_congestion_control?: boolean | null;
+            /** @description Omit to keep the saved value. */
+            ice_servers_in_install?: boolean;
         };
         IceServerProbeItem: {
             server: string;

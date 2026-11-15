@@ -22,18 +22,21 @@ type ClientDownloads interface {
 
 // clientDownloadsDTO is components.schemas.ClientDownloads.
 type clientDownloadsDTO struct {
-	Enabled         bool             `json:"enabled"`
-	Version         string           `json:"version,omitempty"`
-	ReleaseURL      string           `json:"release_url,omitempty"`
-	PublishedAt     *time.Time       `json:"published_at,omitempty"`
-	Error           string           `json:"error,omitempty"`
-	IDServer        string           `json:"id_server"`
-	RelayServer     string           `json:"relay_server"`
-	APIServer       string           `json:"api_server"`
-	PublicKey       string           `json:"public_key"`
-	ConfigString    string           `json:"config_string"`
-	WindowsFileName string           `json:"windows_file_name,omitempty"`
-	Assets          []clientdl.Asset `json:"assets"`
+	Enabled         bool       `json:"enabled"`
+	Version         string     `json:"version,omitempty"`
+	ReleaseURL      string     `json:"release_url,omitempty"`
+	PublishedAt     *time.Time `json:"published_at,omitempty"`
+	Error           string     `json:"error,omitempty"`
+	IDServer        string     `json:"id_server"`
+	RelayServer     string     `json:"relay_server"`
+	APIServer       string     `json:"api_server"`
+	PublicKey       string     `json:"public_key"`
+	ConfigString    string     `json:"config_string"`
+	WindowsFileName string     `json:"windows_file_name,omitempty"`
+	// ICEServers (comma-separated) for the install commands, only when an
+	// admin turned on Server → Client options → "Add to install commands".
+	ICEServers string           `json:"ice_servers,omitempty"`
+	Assets     []clientdl.Asset `json:"assets"`
 }
 
 // windowsInstallers maps the {arch} of /clients/windows/{arch} to assets.
@@ -50,6 +53,11 @@ func (c *b2bCore) handleClients(w http.ResponseWriter, r *http.Request) {
 	out := clientDownloadsDTO{
 		IDServer: cs.Host, RelayServer: cs.Relay, APIServer: cs.API, PublicKey: cs.Key,
 		ConfigString: cfg, Assets: []clientdl.Asset{},
+	}
+	if c.d.ClientOptions != nil {
+		if o, err := c.d.ClientOptions.Get(r.Context()); err == nil && o != nil && o.InInstall {
+			out.ICEServers = o.ICEServers
+		}
 	}
 	if c.d.Clients == nil {
 		httpx.WriteJSON(w, http.StatusOK, out)

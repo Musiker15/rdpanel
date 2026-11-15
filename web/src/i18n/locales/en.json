@@ -856,6 +856,13 @@
         "success": "All tested ICE servers are reachable",
         "someFailed": "Some ICE servers failed or timed out",
         "reachableCount": "reachable"
+      },
+      "ice153": {
+        "notice": "RustDesk 1.5.3 and later ignore ice-servers sent by the panel and keep their own value; older clients still take it from here.",
+        "devices_one": "{{count}} device here runs such a version.",
+        "devices_other": "{{count}} devices here run such a version.",
+        "inInstall": "Add to install commands",
+        "inInstallHint": "Puts --option ice-servers into the commands on My → Install client, which is how 1.5.3 and later still get the list. Every signed-in user sees that page, TURN passwords included."
       }
     },
     "viewers": {
@@ -946,8 +953,8 @@
     }
   },
   "settings": {
-      "enabled": "Share links",
-      "enabledHint": "Lets anyone with a link reach a page at /s/<token> that offers the preconfigured client, a QR code and this server's settings, without a panel account. While off, every such page answers 404 and no link can be created.",
+    "enabled": "Share links",
+    "enabledHint": "Lets anyone with a link reach a page at /s/<token> that offers the preconfigured client, a QR code and this server's settings, without a panel account. While off, every such page answers 404 and no link can be created.",
     "description": "Panel configuration: public address, branding, authentication and retention.",
     "tabs": {
       "general": "General",
@@ -1749,7 +1756,10 @@
     "toasts": {
       "defaultSet": "Default strategy updated",
       "deleted": "Strategy deleted"
-    }
+    },
+    "ignored153_one": "{{count}} option ignored by 1.5.3+",
+    "ignored153_other": "{{count}} options ignored by 1.5.3+",
+    "ignored153Hint": "RustDesk 1.5.3 and later do not take these options from strategies: {{keys}}. Older clients still apply them."
   },
   "acl": {
     "title": "Connection ACL & Control Roles",
