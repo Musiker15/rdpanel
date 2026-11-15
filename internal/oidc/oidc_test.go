@@ -358,15 +358,18 @@ func TestLinkingRules(t *testing.T) {
 		linkEmail  bool
 		autoReg    bool
 		verified   bool
+		panelOK    bool   // the existing user's address is verified in the panel
 		wantUser   string // "existing", "new", "" (error)
 		wantErrSub string
 	}
 	cases := []tc{
-		{"verified email links when enabled", true, false, true, "existing", ""},
-		{"unverified email never links", true, false, false, "", "No account is linked"},
-		{"unverified email + auto-register creates a new user", true, true, false, "new", ""},
-		{"verified email but linking disabled", false, false, true, "", "No account is linked"},
-		{"linking disabled + auto-register creates new user", false, true, true, "new", ""},
+		{"verified email links when enabled", true, false, true, true, "existing", ""},
+		{"unverified email never links", true, false, false, true, "", "No account is linked"},
+		{"unverified email + auto-register creates a new user", true, true, false, true, "new", ""},
+		{"verified email but linking disabled", false, false, true, true, "", "No account is linked"},
+		{"linking disabled + auto-register creates new user", false, true, true, true, "new", ""},
+		// The panel must have verified the address too.
+		{"address not verified in the panel never links", true, true, true, false, "", "not verified in the panel"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -374,6 +377,12 @@ func TestLinkingRules(t *testing.T) {
 				p.LinkByVerifiedEmail, p.AutoRegister = c.linkEmail, c.autoReg
 			})
 			existing := e.user("bob", "Bob@Example.test")
+			if c.panelOK {
+				at := e.clk.now()
+				if err := e.st.Users.SetEmailVerified(context.Background(), existing.ID, existing.Email, &at); err != nil {
+					t.Fatal(err)
+				}
+			}
 			code, cb := e.clientLogin("authentik", oidctest.Identity{Subject: "sub-bob", Email: "bob@example.test",
 				EmailVerified: c.verified, PreferredUsername: "bob", Name: "Bob"})
 			if cb.Code != 200 {

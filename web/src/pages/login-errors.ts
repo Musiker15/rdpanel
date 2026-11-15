@@ -31,6 +31,7 @@ export const OIDC_ERROR_CODES = [
   "ambiguous",
   "already_linked",
   "session_mismatch",
+  "email_unverified",
 ] as const;
 
 /** i18n key for an OIDC redirect error (`oidc_no_account` or `no_account`). */

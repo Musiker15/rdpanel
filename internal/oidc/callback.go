@@ -41,6 +41,7 @@ var (
 	errAmbiguous     = &flowError{"ambiguous", "Several accounts use this email address; ask an administrator to link your identity."}
 	errAlreadyLinked = &flowError{"already_linked", "This identity is already linked to another account, or your account already has an identity of this provider."}
 	errMismatch      = &flowError{"session_mismatch", "This login was started in a different browser. Please start again."}
+	errUnverified    = &flowError{"email_unverified", "An account uses this e-mail address, but the address is not verified in the panel. Sign in to the panel and link the identity under My security, or ask an administrator to verify the address."}
 )
 
 func asFlowError(err error) *flowError {
@@ -288,6 +289,12 @@ func (s *Service) resolveLogin(ctx context.Context, prov *store.IdentityProvider
 				return errAmbiguous
 			}
 			if len(users) == 1 {
+				// Both sides must vouch for the address: the IdP (email_verified)
+				// and the panel. An address typed into the panel and never
+				// verified may belong to someone else at the IdP.
+				if !users[0].EmailVerified() {
+					return errUnverified
+				}
 				user = users[0]
 				return s.link(ctx, tx, user.ID, prov.ID, p)
 			}
