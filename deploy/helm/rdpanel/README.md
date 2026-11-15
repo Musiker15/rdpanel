@@ -116,6 +116,16 @@ The rendezvous Service publishes 21115/tcp, 21116/tcp+udp and 21117/tcp.
   Cloud examples: AWS NLB `service.beta.kubernetes.io/aws-load-balancer-type: external`
   plus `...-nlb-target-type: ip`. GKE does mixed protocol natively on 1.26+.
 
+### Service mesh (Istio, Linkerd)
+
+The pod carries `sidecar.istio.io/inject: "false"` and `linkerd.io/inject: disabled` by
+default (`podAnnotations`). hbbs and hbbr accept their admin console from loopback, and a
+mesh sidecar hands every outside connection over from loopback: with a sidecar, anyone who
+reaches 21115 or 21117 could reconfigure them (relay servers, `must-login`, IP blocker),
+and the panel would trust `X-Forwarded-For` and serve `/metrics` to everyone. Enable a
+sidecar only with the ports 21115-21119 excluded from interception
+(`traffic.sidecar.istio.io/excludeInboundPorts`, `config.linkerd.io/skip-inbound-ports`).
+
 ### WebSocket (21118 / 21119)
 
 Used by the RustDesk web client and by clients with "use WebSocket" enabled.
