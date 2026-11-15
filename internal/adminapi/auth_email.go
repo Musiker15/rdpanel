@@ -156,6 +156,17 @@ func (c *authCore) handleResetPasswordByEmail(w http.ResponseWriter, r *http.Req
 		rateLimited(w, wait)
 		return
 	}
+	// Check the token before hashing: argon2id is expensive, and without a
+	// valid token there is nothing to hash for.
+	if _, err := c.mail.CheckResetToken(ctx, req.Token); errors.Is(err, mailauth.ErrInvalidToken) {
+		c.fail(key)
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_token", "the reset link is invalid or has expired")
+		return
+	} else if err != nil {
+		c.d.Log.ErrorContext(ctx, "check password reset token", slog.Any("err", err))
+		internalError(w)
+		return
+	}
 	hash, algo, err := c.d.Hasher.Hash(req.NewPassword)
 	if err != nil {
 		badRequest(w, "invalid password")
