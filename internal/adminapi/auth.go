@@ -199,7 +199,7 @@ func (c *authCore) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ipKey, uKey := limitIP+httpx.ClientIPKey(r), userKey(req.Username)
-	if ok, wait := c.allow(ipKey, uKey); !ok {
+	if ok, wait := c.allow(ipKey); !ok {
 		c.d.Telemetry.Login(metrics.SurfacePanel, metrics.MethodPassword, metrics.ResultRateLimited)
 		rateLimited(w, wait)
 		return
@@ -209,6 +209,15 @@ func (c *authCore) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		c.d.Log.ErrorContext(ctx, "login: load user", slog.Any("err", err))
 		internalError(w)
+		return
+	}
+	// The per-name backoff stops guessing one account from many addresses,
+	// but anyone who knows a login name could keep it locked. It does not
+	// apply on a network the user signed in from lately (the per-IP backoff
+	// above still does).
+	if ok, wait := c.allow(uKey); !ok && !loginlog.KnownNetwork(ctx, c.d.Store, user, r) {
+		c.d.Telemetry.Login(metrics.SurfacePanel, metrics.MethodPassword, metrics.ResultRateLimited)
+		rateLimited(w, wait)
 		return
 	}
 	// localOK: the password matched the stored local hash (not LDAP).

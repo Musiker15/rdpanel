@@ -14,6 +14,7 @@ import (
 
 	"github.com/bropines/rdpanel/internal/auth"
 	"github.com/bropines/rdpanel/internal/httpx"
+	"github.com/bropines/rdpanel/internal/loginlog"
 	"github.com/bropines/rdpanel/internal/mailauth"
 	"github.com/bropines/rdpanel/internal/metrics"
 	"github.com/bropines/rdpanel/internal/store"
@@ -81,6 +82,11 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, k := range []string{ipKey, userKey} {
 		if ok, wait := h.Limiter.Allow(k); !ok {
+			// The per-name backoff does not apply on a network the user signed
+			// in from lately, so nobody can keep a known login name locked.
+			if k == userKey && h.knownNetwork(r, req.Username) {
+				continue
+			}
 			h.Telemetry.Login(metrics.SurfaceClient, factor, metrics.ResultRateLimited)
 			secs := int(math.Ceil(wait.Seconds()))
 			w.Header().Set("Retry-After", fmt.Sprint(secs))
@@ -383,4 +389,11 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeEmpty(w)
+}
+
+// knownNetwork reports whether the user named username signed in from the
+// client's network lately (loginlog.KnownNetwork).
+func (h *handler) knownNetwork(r *http.Request, username string) bool {
+	u, err := h.st.Users.GetByUsername(r.Context(), strings.TrimSpace(username))
+	return err == nil && loginlog.KnownNetwork(r.Context(), h.st, u, r)
 }

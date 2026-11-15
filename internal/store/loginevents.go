@@ -138,3 +138,24 @@ func (r *LoginEvents) PurgeBefore(ctx context.Context, cutoff time.Time) (int64,
 	}
 	return res.RowsAffected()
 }
+
+// SucceededFrom reports whether userID signed in successfully since since
+// from an address match accepts (the newest 200 successes are looked at).
+func (r *LoginEvents) SucceededFrom(ctx context.Context, userID int64, since time.Time, match func(ip string) bool) (bool, error) {
+	rows, err := r.q.QueryContext(ctx, `SELECT ip FROM login_events WHERE user_id = ? AND result = ? AND created_at >= ?
+		AND ip IS NOT NULL ORDER BY id DESC LIMIT 200`, userID, LoginSuccess, toMs(since))
+	if err != nil {
+		return false, mapErr(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var ip string
+		if err := rows.Scan(&ip); err != nil {
+			return false, mapErr(err)
+		}
+		if match(ip) {
+			return true, nil
+		}
+	}
+	return false, mapErr(rows.Err())
+}
