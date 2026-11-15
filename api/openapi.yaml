@@ -3373,6 +3373,32 @@ paths:
               schema: { $ref: "#/components/schemas/RelayRotation" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /relays/sessions:
+    get:
+      tags: [relays]
+      operationId: getRelaySessions
+      summary: Live relayed sessions of every relay that can report them, with the devices last seen at each peer IP (admin).
+      description: >-
+        Runs hbbr `usage` on the local relay and on every connected agent. Static relays and
+        disconnected agents have no live data and are listed under `unavailable`. Direct (P2P)
+        connections never pass a relay and do not appear, and hbbr lists one endpoint of each
+        session only. The device labels match the peer IP against each device's recent heartbeat
+        address, so devices behind one NAT share them.
+      responses:
+        "200":
+          description: Sessions per relay.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [checked_at, items, unavailable]
+                properties:
+                  checked_at: { type: string, format: date-time }
+                  items: { type: array, items: { $ref: "#/components/schemas/RelaySession" } }
+                  unavailable: { type: array, items: { $ref: "#/components/schemas/RelaySessionsUnavailable" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/Unavailable" }
   /relays/options:
     get:
       tags: [relays]
@@ -6140,7 +6166,7 @@ components:
           description: Pass as `before` for older entries; null when there are none.
     RelayUsage:
       type: object
-      required: [peer, elapsed_s, total_mb, highest_kbps, avg_kbps, current_kbps]
+      required: [peer, elapsed_s, total_mb, highest_kbps, avg_kbps, current_kbps, devices, devices_total]
       properties:
         peer: { type: string, description: "ip:port" }
         elapsed_s: { type: integer }
@@ -6148,6 +6174,40 @@ components:
         highest_kbps: { type: number }
         avg_kbps: { type: number }
         current_kbps: { type: number }
+        devices:
+          type: array
+          description: >-
+            Up to 5 devices whose last heartbeat came from the peer's IP within the last 10 minutes,
+            most recent first. A hint, not an identification (shared NAT addresses).
+          items: { $ref: "#/components/schemas/RelayDeviceRef" }
+        devices_total: { type: integer, description: All devices matching the peer's IP, including the ones beyond `devices`. }
+    RelayDeviceRef:
+      type: object
+      required: [id, rustdesk_id, label]
+      properties:
+        id: { type: integer, format: int64 }
+        rustdesk_id: { type: string }
+        label: { type: string, description: "Alias, else hostname, else RustDesk ID." }
+    RelaySession:
+      allOf:
+        - $ref: "#/components/schemas/RelayUsage"
+        - type: object
+          required: [relay_id, relay_name, relay_kind, relay_host]
+          properties:
+            relay_id: { type: integer, format: int64 }
+            relay_name: { type: string }
+            relay_kind: { $ref: "#/components/schemas/RelayKind" }
+            relay_host: { type: string, description: "Public host[:port] clients connect to." }
+    RelaySessionsUnavailable:
+      type: object
+      required: [relay_id, relay_name, relay_kind, relay_host, reason]
+      properties:
+        relay_id: { type: integer, format: int64 }
+        relay_name: { type: string }
+        relay_kind: { $ref: "#/components/schemas/RelayKind" }
+        relay_host: { type: string }
+        reason: { type: string, enum: [no_live_usage, error], description: "no_live_usage: static relay or disconnected agent." }
+        error: { type: string }
     RelayTrafficSummary:
       type: object
       required: [relay_id, hours, total_bytes, total_sessions, max_active, items]

@@ -1,17 +1,18 @@
 /* Page chrome for /api/v1/docs; Swagger UI has no dark theme, so dark mode inverts it. */
 :root {
   color-scheme: light;
+  /* Same RustDesk-based palette as src/index.css. */
   --docs-bg: #ffffff;
-  --docs-fg: #0f0f12;
-  --docs-muted: #6b6b76;
-  --docs-border: #e4e4e7;
+  --docs-fg: #212121;
+  --docs-muted: #666666;
+  --docs-border: #cccccc;
 }
 :root.dark {
   color-scheme: dark;
-  --docs-bg: #09090b;
+  --docs-bg: #18191e;
   --docs-fg: #fafafa;
-  --docs-muted: #a1a1aa;
-  --docs-border: #27272a;
+  --docs-muted: #949494;
+  --docs-border: #3f3f3f;
 }
 body {
   margin: 0;

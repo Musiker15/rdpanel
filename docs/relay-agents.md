@@ -236,6 +236,22 @@ Every action is in Audit → Admin; agent events (`relay.agent.enroll`,
 `relay.agent.connect`, `relay.agent.superseded`, `relay.agent.config_error`) are
 recorded with the actor `agent:<id>`.
 
+### Active relay sessions
+
+The *Active relay sessions* card on this tab (`GET /api/v1/admin/relays/sessions`)
+runs hbbr `usage` on the local relay and every connected agent and lists each
+relayed session with the relay that carries it. Static relays and disconnected
+agents have no live data and are named below the table. The same data shows up
+per device in the device drawer.
+
+Next to each peer address the panel shows the devices whose last heartbeat came
+from that IP in the last 10 minutes (alias, else hostname, else RustDesk ID; up
+to five, the rest as `+N`). Treat it as a hint:
+
+- devices behind one NAT share the address, so all of them are listed;
+- hbbr reports one endpoint of each session, so the other side stays unlabelled;
+- direct (P2P) connections never pass a relay and never appear here.
+
 ## Security notes
 
 - **Relays are public bandwidth.** hbbr checks only the hbbs *public* key, which

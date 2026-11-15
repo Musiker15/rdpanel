@@ -12,7 +12,7 @@ import type { IdentityProvider, IdentityProviderInput, IdentityProviderPatch } f
 import * as db from "@/mocks/data";
 import { federationHandlers } from "@/mocks/federation";
 import { logHandlers } from "@/mocks/logs";
-import { relayHandlers } from "@/mocks/relays";
+import { mockUsage, relayHandlers } from "@/mocks/relays";
 import { liveStream } from "@/mocks/sse";
 import { strategyHandlers } from "@/mocks/strategies";
 import { aclHandlers } from "@/mocks/acl";
@@ -1647,15 +1647,7 @@ export const handlers = [
   http.get(`${B}/server/relay-usage`, () => {
     const u = requireAdmin();
     if (u instanceof Response) return u;
-    const t = Date.now() / 1000;
-    return ok({
-      checked_at: nowIso(),
-      items: [
-        { peer: "185.12.40.11:51234", elapsed_s: 312 + Math.floor(t % 60), total_mb: 85.2, highest_kbps: 9830, avg_kbps: 2185, current_kbps: 1500 + Math.round(Math.sin(t) * 400) },
-        { peer: "91.203.7.88:40022", elapsed_s: 1460, total_mb: 41.7, highest_kbps: 4410, avg_kbps: 228, current_kbps: 96 },
-        { peer: "46.39.12.201:61007", elapsed_s: 75, total_mb: 3.1, highest_kbps: 1220, avg_kbps: 330, current_kbps: 410 },
-      ],
-    });
+    return ok({ checked_at: nowIso(), items: mockUsage(1) });
   }),
   http.get(`${B}/server/console/commands`, () => {
     const u = requireAdmin();

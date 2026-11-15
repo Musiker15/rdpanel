@@ -41,7 +41,7 @@ import {
 import { ConfirmDialog, CopyButton, EmptyState, ErrorState, Field, KeyValue, Mono, RelativeTime, SectionTitle, Sparkline, useErrorMessage } from "@/components";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -55,8 +55,10 @@ import { Skeleton, Switch, Tabs, TabsContent, TabsList, TabsTrigger, Textarea } 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { isCIDR, isHostPort } from "@/lib/validate";
+import { formatElapsed, RelayPeer } from "@/pages/server/RelayPeer";
 
 type Health = Relay["health"];
 
@@ -983,7 +985,7 @@ function UsageSection({ r }: { r: Relay }) {
               {q.data.items.map((u) => (
                 <TableRow key={u.peer}>
                   <TableCell>
-                    <Mono>{u.peer}</Mono>
+                    <RelayPeer peer={u.peer} devices={u.devices} total={u.devices_total} />
                   </TableCell>
                   <TableCell className="text-right">{u.total_mb.toFixed(1)}</TableCell>
                   <TableCell className="text-right">{u.current_kbps}</TableCell>
@@ -994,6 +996,82 @@ function UsageSection({ r }: { r: Relay }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** Live relayed sessions of all relays (issue #39), with device labels. */
+function LiveSessionsCard() {
+  const { t, i18n } = useTranslation();
+  const q = useQuery({ queryKey: relayKeys.sessions, queryFn: relaysApi.sessions, refetchInterval: 10_000, retry: false });
+  const unavailable = q.data?.unavailable ?? [];
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 p-4 pb-3">
+        <div className="space-y-1">
+          <CardTitle className="text-base">{t("relays.live.title")}</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            {t("relays.live.hint")}
+            {q.data && (
+              <>
+                {" · "}
+                <RelativeTime iso={q.data.checked_at} />
+              </>
+            )}
+          </p>
+        </div>
+        <Button variant="ghost" size="sm" aria-label={t("common.refresh")} onClick={() => void q.refetch()}>
+          <RefreshCw className={cn(q.isFetching && "animate-spin")} />
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-3 p-0 pb-4">
+        {q.isError ? (
+          <p className="px-4 text-sm text-muted-foreground">{t("relays.drawer.usageUnavailable")}</p>
+        ) : !q.data ? (
+          <div className="px-4">
+            <Skeleton className="h-16" />
+          </div>
+        ) : q.data.items.length === 0 ? (
+          <p className="px-4 text-sm text-muted-foreground">{t("relays.live.empty")}</p>
+        ) : (
+          <div className="overflow-x-auto border-y">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("relays.live.peer")}</TableHead>
+                  <TableHead>{t("relays.live.relay")}</TableHead>
+                  <TableHead className="hidden sm:table-cell">{t("server.elapsed")}</TableHead>
+                  <TableHead className="hidden text-right md:table-cell">{t("server.total")}</TableHead>
+                  <TableHead className="text-right">{t("server.current")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {q.data.items.map((s) => (
+                  <TableRow key={`${s.relay_id}/${s.peer}`}>
+                    <TableCell>
+                      <RelayPeer peer={s.peer} devices={s.devices} total={s.devices_total} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-medium">{s.relay_name}</div>
+                      <Mono className="text-xs text-muted-foreground">{s.relay_host}</Mono>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">{formatElapsed(s.elapsed_s)}</TableCell>
+                    <TableCell className="hidden text-right md:table-cell">{`${formatNumber(s.total_mb, i18n.language, 1)} MB`}</TableCell>
+                    <TableCell className="text-right">{`${formatNumber(s.current_kbps, i18n.language)} kb/s`}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+        {unavailable.length > 0 && (
+          <p className="px-4 text-xs text-muted-foreground">
+            {t("relays.live.unavailable", {
+              relays: unavailable.map((u) => `${u.relay_name} (${t(`relays.live.reason.${u.reason}`)})`).join(", "),
+            })}
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1408,6 +1486,8 @@ export function RelaysTab() {
           </Table>
         </div>
       )}
+
+      <LiveSessionsCard />
 
       <PrefixRulesCard relays={data.items} />
 

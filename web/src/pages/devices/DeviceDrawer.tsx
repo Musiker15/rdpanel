@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import type { Schemas } from "@/api/client";
 import { deviceKeys, devicesApi, type DeviceDetail } from "@/api/devices";
+import { relayKeys, relaysApi } from "@/api/relays";
 import {
   ConfirmDialog,
   CopyButton,
@@ -26,6 +27,7 @@ import { Skeleton, Textarea } from "@/components/ui/misc";
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatDuration, formatRustdeskId, userLabel } from "@/lib/format";
 import { DeviceBulkDialog } from "@/pages/devices/dialogs";
+import { DEVICE_IP_FRESHNESS_MS, formatElapsed, peerAddress, RelayPeer } from "@/pages/server/RelayPeer";
 
 export function OsIcon({ family, className }: { family: Schemas["OsFamily"] | undefined; className?: string }) {
   const Icon =
@@ -165,6 +167,49 @@ function EditForm({ device, isAdmin }: { device: DeviceDetail; isAdmin: boolean 
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Relayed sessions whose peer IP matches the device's recent heartbeat address
+ * (admin only: /relays/sessions). Matched on the device's own IP as well, since
+ * the API names at most five devices per address. Direct connections never
+ * pass a relay.
+ */
+function RelaySessionsSection({ device }: { device: Pick<DeviceDetail, "id" | "last_seen_ip" | "last_heartbeat_at"> }) {
+  const { t } = useTranslation();
+  const q = useQuery({ queryKey: relayKeys.sessions, queryFn: relaysApi.sessions, refetchInterval: 10_000, retry: false });
+  const fresh =
+    !!device.last_seen_ip && !!device.last_heartbeat_at && Date.now() - Date.parse(device.last_heartbeat_at) <= DEVICE_IP_FRESHNESS_MS;
+  const ownAddress = fresh ? peerAddress(device.last_seen_ip!) : null;
+  const mine =
+    q.data?.items.filter((s) => s.devices.some((d) => d.id === device.id) || (ownAddress !== null && peerAddress(s.peer) === ownAddress)) ?? [];
+  const shared = mine.some((s) => s.devices_total > 1);
+  // Relay management off (503) or not reachable: nothing to say here.
+  if (q.isError) return null;
+  return (
+    <section>
+      <SectionTitle>{t("devices.relaySessions")}</SectionTitle>
+      {!q.data ? (
+        <Skeleton className="h-10" />
+      ) : mine.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t("devices.relaySessionsEmpty")}</p>
+      ) : (
+        <>
+          <ul className="divide-y rounded-md border text-sm">
+            {mine.map((s) => (
+              <li key={`${s.relay_id}/${s.peer}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+                <span className="font-medium">{s.relay_name}</span>
+                <Mono className="text-xs text-muted-foreground">{s.relay_host}</Mono>
+                <RelayPeer peer={s.peer} devices={s.devices} total={s.devices_total} />
+                <span className="ml-auto text-xs text-muted-foreground">{formatElapsed(s.elapsed_s)}</span>
+              </li>
+            ))}
+          </ul>
+          {shared && <p className="mt-1.5 text-xs text-muted-foreground">{t("devices.relaySessionsShared")}</p>}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -345,6 +390,7 @@ export function DeviceDrawer({
                   </ul>
                 )}
               </section>
+              {isAdmin && <RelaySessionsSection device={d} />}
               {d.address_books.length > 0 && (
                 <section>
                   <SectionTitle>{t("devices.inBooks")}</SectionTitle>
