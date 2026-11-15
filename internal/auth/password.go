@@ -61,7 +61,16 @@ var DefaultArgon2Params = Argon2Params{Memory: 64 * 1024, Time: 2, Threads: 2, S
 // reset endpoints run one per request before any failure is recorded, so a
 // burst of parallel requests could otherwise exhaust the server's memory.
 // Requests over the cap wait for a slot.
-var argon2Slots = make(chan struct{}, max(2, runtime.NumCPU()))
+var argon2Slots = make(chan struct{}, argon2SlotCount(runtime.GOMAXPROCS(0)))
+
+// argon2SlotCount is how many argon2id computations may run at once with
+// procs usable CPUs. Each one already keeps DefaultArgon2Params.Threads lanes
+// busy, so more than procs/Threads at a time adds memory, not throughput.
+// GOMAXPROCS rather than NumCPU, because it follows a container's CPU limit.
+// The ceiling keeps the worst case near 256 MiB however large the host.
+func argon2SlotCount(procs int) int {
+	return min(4, max(2, procs/int(DefaultArgon2Params.Threads)))
+}
 
 // idKey is argon2.IDKey; tests swap it to observe concurrency.
 var idKey = argon2.IDKey

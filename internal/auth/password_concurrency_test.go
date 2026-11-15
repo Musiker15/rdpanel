@@ -53,3 +53,11 @@ func TestArgon2ConcurrencyIsCapped(t *testing.T) {
 		t.Fatalf("peak %d: the computations did not run in parallel at all", got)
 	}
 }
+
+func TestArgon2SlotCount(t *testing.T) {
+	for procs, want := range map[int]int{1: 2, 2: 2, 4: 2, 6: 3, 8: 4, 16: 4, 64: 4} {
+		if got := argon2SlotCount(procs); got != want {
+			t.Errorf("argon2SlotCount(%d) = %d, want %d", procs, got, want)
+		}
+	}
+}
