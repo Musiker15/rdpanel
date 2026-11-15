@@ -1,0 +1,81 @@
+name: Bug report
+description: Something in RD Panel does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Security problems do not belong here: please follow [SECURITY.md](https://github.com/bropines/rdpanel/blob/main/SECURITY.md).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Server → Relays
+        2. Click …
+        3. See …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: RD Panel version
+      description: Shown on the About page, or the image tag you run.
+      placeholder: "0.16.0"
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: RustDesk client version and platform
+      description: If clients are involved.
+      placeholder: "1.5.3 on Windows 11"
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      options:
+        - Docker image, host networking
+        - Docker image, bridge networking
+        - Helm chart
+        - Binary
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: database
+    attributes:
+      label: Database
+      options:
+        - SQLite
+        - PostgreSQL
+    validations:
+      required: true
+  - type: textarea
+    id: proxy
+    attributes:
+      label: Reverse proxy
+      description: Which proxy sits in front of the panel and the WebSocket ports, if any.
+      placeholder: nginx, Apache, Caddy, Traefik, Cloudflare …
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The relevant lines from `docker compose logs` (prefixed `[panel]`, `[hbbs]`, `[hbbr]`). Remove tokens, keys and addresses you do not want to share.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the existing issues and this is not a duplicate.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true
