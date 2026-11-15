@@ -177,6 +177,106 @@ func TestHBBSAuthzKey(t *testing.T) {
 	}
 }
 
+// TestPutFileDoesNotFollowSymlinks covers the helper key-secret writes /data
+// with. It runs as root in a directory that belongs to PUID, so a symlink an
+// unprivileged process left under the target's name must be replaced, not
+// written through, and the mode must land on the new file only.
+func TestPutFileDoesNotFollowSymlinks(t *testing.T) {
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("no sh")
+	}
+	dir := t.TempDir()
+	victim := filepath.Join(dir, "victim")
+	if err := os.WriteFile(victim, []byte("untouched"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	put := func(target, mode, content string) {
+		t.Helper()
+		cmd := exec.Command(sh, filepath.Join(rootfs, "usr/libexec/rdpanel/put-file"), target, mode)
+		cmd.Stdin = strings.NewReader(content)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("put-file %s: %v\n%s", target, err, out)
+		}
+	}
+	check := func(target, mode, content string) {
+		t.Helper()
+		st, err := os.Lstat(target)
+		if err != nil || !st.Mode().IsRegular() {
+			t.Fatalf("%s is not a regular file: %v %v", target, st, err)
+		}
+		if got := st.Mode().Perm().String(); got != mode {
+			t.Errorf("%s mode %s, want %s", target, got, mode)
+		}
+		if b, _ := os.ReadFile(target); string(b) != content {
+			t.Errorf("%s content %q", target, b)
+		}
+	}
+
+	// A plain write, then an existing link (to a file and dangling) under the
+	// target's name, and a link under the old fixed temporary name.
+	key := filepath.Join(dir, "id_ed25519")
+	put(key, "0600", "secret")
+	check(key, "-rw-------", "secret")
+	for _, link := range []string{"machine-id", "jwt.key"} {
+		if err := os.Symlink(victim, filepath.Join(dir, link)); err != nil {
+			t.Skipf("no symlinks here: %v", err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(dir, "missing"), filepath.Join(dir, "id_ed25519.pub")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victim, filepath.Join(dir, "id_ed25519.pub.tmp")); err != nil {
+		t.Fatal(err)
+	}
+	put(filepath.Join(dir, "machine-id"), "0644", "id\n")
+	put(filepath.Join(dir, "jwt.key"), "0600", "jwt")
+	put(filepath.Join(dir, "id_ed25519.pub"), "0644", "pub")
+	check(filepath.Join(dir, "machine-id"), "-rw-r--r--", "id\n")
+	check(filepath.Join(dir, "jwt.key"), "-rw-------", "jwt")
+	check(filepath.Join(dir, "id_ed25519.pub"), "-rw-r--r--", "pub")
+	if _, err := os.Lstat(filepath.Join(dir, "missing")); !os.IsNotExist(err) {
+		t.Error("put-file created the dangling link's target")
+	}
+	check(victim, "-rw-------", "untouched")
+
+	// hbbs-authz-key goes through put-file too.
+	authz := filepath.Join(dir, "hbbs-authz.key")
+	if err := os.Symlink(filepath.Join(dir, "missing"), authz); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command(sh, filepath.Join(rootfs, "usr/libexec/rdpanel/hbbs-authz-key"), authz).CombinedOutput(); err != nil ||
+		strings.TrimSpace(string(out)) != "generated" {
+		t.Fatalf("hbbs-authz-key over a dangling link: %v %s", err, out)
+	}
+	if st, err := os.Lstat(authz); err != nil || !st.Mode().IsRegular() || st.Mode().Perm() != 0o600 {
+		t.Fatalf("hbbs-authz.key: %v %v", st, err)
+	}
+	if _, err := os.Lstat(filepath.Join(dir, "missing")); !os.IsNotExist(err) {
+		t.Error("hbbs-authz-key wrote through the dangling link")
+	}
+
+	// No temporary files are left behind.
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".") {
+			t.Errorf("leftover %s", e.Name())
+		}
+	}
+
+	// key-secret writes through put-file, with no fixed temporary names left.
+	ks, err := os.ReadFile(filepath.Join(rootfs, "usr/libexec/rdpanel/key-secret"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(ks), ".tmp") || !strings.Contains(string(ks), "PUT=/usr/libexec/rdpanel/put-file") {
+		t.Error("key-secret still writes /data without put-file")
+	}
+	if regexp.MustCompile(`(?m)^\s*chmod [0-7]`).Match(ks) {
+		t.Error("key-secret chmods a file directly; use set_mode, which skips symlinks")
+	}
+}
+
 // TestLogPipelinesFeedTheLogsPage checks the s6 wiring behind Server -> Logs:
 // every service has a "<name>-log" consumer running prefix-log <name>, the
 // sources prefix-log copies to s6-log are exactly logs.FileSources, and the
