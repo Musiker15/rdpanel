@@ -252,6 +252,12 @@ func TestAPITokenCannotManageCredentials(t *testing.T) {
 		{http.MethodGet, "/me/security"},
 		{http.MethodGet, "/me/security/sessions"},
 		{http.MethodPost, "/me/security/password"},
+		// The web client's config mints a client JWT; credentials are remembered
+		// device passwords.
+		{http.MethodGet, "/webclient/config"},
+		{http.MethodGet, "/webclient/credentials/123456789"},
+		{http.MethodPut, "/webclient/credentials/123456789"},
+		{http.MethodGet, "/webclient/shells/123456789"},
 	}
 	for _, tc := range cases {
 		code, m := e.bearer(tc.method, tc.path, tok, map[string]any{"name": "x", "scope": "write"})
