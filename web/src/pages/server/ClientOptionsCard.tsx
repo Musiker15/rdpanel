@@ -216,7 +216,7 @@ export function ClientOptionsCard() {
             />
             {error && <p className="text-xs text-destructive">{t(error)}</p>}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <Button
                   type="button"
                   variant="outline"
