@@ -55,6 +55,27 @@ uses this panel as its API server. The panel sends them in the heartbeat respons
   RFC 5389) and report latency before saving. Applying a preset keeps custom TURN servers intact.
 - If a list has only TURN servers, RustDesk adds its default STUN servers in front.
 
+### RustDesk 1.5.3 and later
+
+RustDesk 1.5.3 stopped taking a set of options from heartbeat strategies
+([rustdesk#16696](https://github.com/rustdesk/rustdesk/pull/16696)), and `ice-servers` is one of
+them: those clients keep their own value and only log `Rejected heartbeat strategy options`.
+`allow-webrtc-congestion-control` still works. The panel keeps sending the list, which older
+clients use, and the card shows how many devices last reported 1.5.3 or later.
+
+To set the list on newer clients, set it when the client is installed:
+
+- turn on **Add to install commands** in the card. The commands on **My → Install client**
+  (PowerShell, Linux, macOS) then end with `rustdesk --option ice-servers '<list>'`, run with the
+  administrator rights the commands already take. It is off by default: that page is open to every
+  signed-in user, so they see the TURN credentials too. The public share page never shows them;
+- or run it yourself on a device, as administrator, with RustDesk installed:
+  `rustdesk --option ice-servers "stun:stun.example.com:3478,turn://user:pass@turn.example.com:3478"`.
+
+The other options 1.5.3 no longer takes from strategies (server addresses, the key, preset
+address book and device fields, trusted devices and a few more) are listed in
+`web/src/lib/strategyOptions.ts`; a strategy that sets one shows a badge on **Server → Strategies**.
+
 ## TURN server (coturn)
 
 TURN is optional. It helps when both sides are behind symmetric NATs or UDP-hostile firewalls,

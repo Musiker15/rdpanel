@@ -17,14 +17,20 @@ import (
 type clientOptionsDTO struct {
 	ICEServers              string  `json:"ice_servers"`
 	WebRTCCongestionControl *bool   `json:"webrtc_congestion_control"`
+	ICEServersInInstall     bool    `json:"ice_servers_in_install"`
 	Pushed                  bool    `json:"pushed"`
 	ModifiedAt              *string `json:"modified_at"`
+	// DevicesIgnoringICE counts devices on RustDesk 1.5.3 or later, which
+	// ignore ice-servers sent in heartbeats.
+	DevicesIgnoringICE int `json:"devices_ignoring_ice"`
 }
 
 // clientOptionsInput is components.schemas.ClientOptionsInput.
 type clientOptionsInput struct {
 	ICEServers              *string `json:"ice_servers"`
 	WebRTCCongestionControl *bool   `json:"webrtc_congestion_control"`
+	// ICEServersInInstall: nil keeps the saved value.
+	ICEServersInInstall *bool `json:"ice_servers_in_install"`
 }
 
 func newClientOptionsDTO(o *clientopts.Options) clientOptionsDTO {
@@ -33,7 +39,18 @@ func newClientOptionsDTO(o *clientopts.Options) clientOptionsDTO {
 	}
 	at := time.UnixMilli(o.ModifiedAt).UTC().Format(time.RFC3339)
 	return clientOptionsDTO{ICEServers: strings.ReplaceAll(o.ICEServers, ",", "\n"),
-		WebRTCCongestionControl: o.WebRTCCongestion, Pushed: true, ModifiedAt: &at}
+		WebRTCCongestionControl: o.WebRTCCongestion, ICEServersInInstall: o.InInstall, Pushed: true, ModifiedAt: &at}
+}
+
+// clientOptionsResponse adds the live device count to the options.
+func (c *b2bCore) clientOptionsResponse(r *http.Request, o *clientopts.Options) clientOptionsDTO {
+	dto := newClientOptionsDTO(o)
+	n, err := c.d.ClientOptions.DevicesIgnoringICE(r.Context())
+	if err != nil {
+		c.log.WarnContext(r.Context(), "client options: count client versions", "err", err)
+	}
+	dto.DevicesIgnoringICE = n
+	return dto
 }
 
 func (c *b2bCore) handleGetClientOptions(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +59,7 @@ func (c *b2bCore) handleGetClientOptions(w http.ResponseWriter, r *http.Request)
 		c.fail(w, r, "client options", err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, newClientOptionsDTO(o))
+	httpx.WriteJSON(w, http.StatusOK, c.clientOptionsResponse(r, o))
 }
 
 func (c *b2bCore) handlePutClientOptions(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +77,16 @@ func (c *b2bCore) handlePutClientOptions(w http.ResponseWriter, r *http.Request)
 	}
 	ctx := r.Context()
 	u := CurrentUser(ctx)
-	o, err := c.d.ClientOptions.Set(ctx, ice, in.WebRTCCongestionControl, &u.ID)
+	cur, err := c.d.ClientOptions.Get(ctx)
+	if err != nil {
+		c.fail(w, r, "client options", err)
+		return
+	}
+	inInstall := cur != nil && cur.InInstall
+	if in.ICEServersInInstall != nil {
+		inInstall = *in.ICEServersInInstall
+	}
+	o, err := c.d.ClientOptions.Save(ctx, ice, in.WebRTCCongestionControl, inInstall, &u.ID)
 	if err != nil {
 		c.fail(w, r, "client options", err)
 		return
@@ -71,8 +97,8 @@ func (c *b2bCore) handlePutClientOptions(w http.ResponseWriter, r *http.Request)
 		n = strings.Count(o.ICEServers, ",") + 1
 	}
 	recordAudit(ctx, c.d, r, "server.client_options.update", "client_options", "",
-		map[string]any{"ice_servers": n, "webrtc_congestion_control": o.WebRTCCongestion})
-	httpx.WriteJSON(w, http.StatusOK, newClientOptionsDTO(o))
+		map[string]any{"ice_servers": n, "webrtc_congestion_control": o.WebRTCCongestion, "ice_servers_in_install": o.InInstall})
+	httpx.WriteJSON(w, http.StatusOK, c.clientOptionsResponse(r, o))
 }
 
 type clientOptionsProbeInput struct {

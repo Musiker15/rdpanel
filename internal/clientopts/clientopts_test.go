@@ -271,3 +271,30 @@ func TestStrategySwitchClearsKeysAndChangesVersion(t *testing.T) {
 		t.Fatalf("cleared congestion control not pushed: %+v", c.ConfigOptions)
 	}
 }
+
+func TestIgnoresStrategyICE(t *testing.T) {
+	for v, want := range map[string]bool{
+		"1.5.3": true, "1.5.3-1": true, "1.5.10": true, "1.6.0": true, "2.0": true,
+		"1.5.2": false, "1.5.1": false, "1.4.9": false, "1.5": false, "": false, "nightly": false,
+	} {
+		if got := IgnoresStrategyICE(v); got != want {
+			t.Errorf("IgnoresStrategyICE(%q) = %v, want %v", v, got, want)
+		}
+	}
+}
+
+func TestInInstallSurvivesSet(t *testing.T) {
+	s, _, _, _ := newService(t)
+	ctx := context.Background()
+	if _, err := s.Save(ctx, "stun:a.example.com", nil, true, nil); err != nil {
+		t.Fatal(err)
+	}
+	o, err := s.Set(ctx, "stun:b.example.com", nil, nil)
+	if err != nil || !o.InInstall {
+		t.Fatalf("Set dropped InInstall: %+v %v", o, err)
+	}
+	// It is not a client option: nothing about it reaches the heartbeat.
+	if _, ok := ConfigOptions(o)["ice_in_install"]; ok || len(ConfigOptions(o)) != 2 {
+		t.Fatalf("config options: %v", ConfigOptions(o))
+	}
+}

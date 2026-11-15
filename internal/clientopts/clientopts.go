@@ -52,6 +52,12 @@ type Options struct {
 	ICEServers string
 	// WebRTCCongestion sets allow-webrtc-congestion-control; nil removes it.
 	WebRTCCongestion *bool
+	// InInstall adds the ICE servers to the install commands of My → Install
+	// client (`rustdesk --option ice-servers …`). RustDesk 1.5.3 stopped
+	// taking ice-servers from heartbeat strategies, so installing is the one
+	// way the panel can still set it. Off by default: TURN URLs carry
+	// credentials, and that page is open to every signed-in user.
+	InInstall bool
 	// ModifiedAt (unix ms) is when the options were last saved (the heartbeat
 	// version is a hash of the pushed options, see Version).
 	ModifiedAt int64
@@ -61,6 +67,7 @@ type Options struct {
 type stored struct {
 	ICEServersEnc    []byte `json:"ice_servers_enc,omitempty"`
 	WebRTCCongestion *bool  `json:"webrtc_congestion_control"`
+	InInstall        bool   `json:"ice_in_install,omitempty"`
 	ModifiedAt       int64  `json:"modified_at"`
 }
 
@@ -109,7 +116,7 @@ func (s *Service) load(ctx context.Context) (*Options, error) {
 	if err != nil {
 		return nil, err
 	}
-	o := &Options{WebRTCCongestion: v.WebRTCCongestion, ModifiedAt: v.ModifiedAt, UpdatedAt: time.UnixMilli(v.ModifiedAt)}
+	o := &Options{WebRTCCongestion: v.WebRTCCongestion, InInstall: v.InInstall, ModifiedAt: v.ModifiedAt, UpdatedAt: time.UnixMilli(v.ModifiedAt)}
 	if len(v.ICEServersEnc) > 0 {
 		if s.aead == nil {
 			return nil, errors.New("clientopts: no AEAD key for the stored ICE servers")
@@ -122,8 +129,17 @@ func (s *Service) load(ctx context.Context) (*Options, error) {
 }
 
 // Set validates and stores the options (a new strategy version) and returns
-// them as saved. actor may be nil.
+// them as saved, keeping InInstall as it was. actor may be nil.
 func (s *Service) Set(ctx context.Context, iceServers string, congestion *bool, actor *int64) (*Options, error) {
+	cur, err := s.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.Save(ctx, iceServers, congestion, cur != nil && cur.InInstall, actor)
+}
+
+// Save is Set with InInstall. actor may be nil.
+func (s *Service) Save(ctx context.Context, iceServers string, congestion *bool, inInstall bool, actor *int64) (*Options, error) {
 	ice, err := NormalizeICEServers(iceServers)
 	if err != nil {
 		return nil, err
@@ -134,7 +150,7 @@ func (s *Service) Set(ctx context.Context, iceServers string, congestion *bool, 
 	if s.loaded && s.cached != nil && modified <= s.cached.ModifiedAt {
 		modified = s.cached.ModifiedAt + 1 // a new version even within the same millisecond
 	}
-	v := stored{WebRTCCongestion: congestion, ModifiedAt: modified}
+	v := stored{WebRTCCongestion: congestion, InInstall: inInstall, ModifiedAt: modified}
 	if ice != "" {
 		if s.aead == nil {
 			return nil, errors.New("clientopts: no AEAD key")
@@ -146,7 +162,7 @@ func (s *Service) Set(ctx context.Context, iceServers string, congestion *bool, 
 	if err := s.st.Settings.Set(ctx, SettingKey, v, actor); err != nil {
 		return nil, err
 	}
-	o := &Options{ICEServers: ice, WebRTCCongestion: congestion, ModifiedAt: modified, UpdatedAt: time.UnixMilli(modified)}
+	o := &Options{ICEServers: ice, WebRTCCongestion: congestion, InInstall: inInstall, ModifiedAt: modified, UpdatedAt: time.UnixMilli(modified)}
 	s.cached, s.loaded = o, true
 	return copyOpts(o), nil
 }

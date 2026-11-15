@@ -209,7 +209,7 @@ function WindowsCard({ d }: { d: ClientDownloads }) {
         <details className="rounded-md border p-3">
           <summary className="cursor-pointer text-sm font-medium">{t("install.windows.silentTitle")}</summary>
           <div className="mt-3">
-            <CommandBlock title="PowerShell" command={windowsCommand(x64, d.config_string)} hint={t("install.windows.silentHint")} />
+            <CommandBlock title="PowerShell" command={windowsCommand(x64, d.config_string, d.ice_servers)} hint={t("install.windows.silentHint")} />
           </div>
         </details>
       )}
@@ -229,7 +229,7 @@ function MacCard({ d }: { d: ClientDownloads }) {
       <Checksum asset={findAsset(d.assets, "macos-x64")} releaseUrl={d.release_url} verify="shasum -a 256 ~/Downloads/rustdesk-*.dmg" />
       <Steps items={[t("install.macos.step1"), t("install.macos.step2")]} />
       <ImportSteps platform="desktop" />
-      <CommandBlock title={t("install.orTerminal")} command={macosCommand(d.config_string)} />
+      <CommandBlock title={t("install.orTerminal")} command={macosCommand(d.config_string, d.ice_servers)} />
     </PlatformCard>
   );
 }
@@ -248,8 +248,8 @@ function LinuxCard({ d }: { d: ClientDownloads }) {
           </Button>
         ))}
       </div>
-      {deb && <CommandBlock title={t("install.linux.deb")} command={linuxCommand(deb, d.config_string)} />}
-      {rpm && <CommandBlock title={t("install.linux.rpm")} command={linuxCommand(rpm, d.config_string)} />}
+      {deb && <CommandBlock title={t("install.linux.deb")} command={linuxCommand(deb, d.config_string, d.ice_servers)} />}
+      {rpm && <CommandBlock title={t("install.linux.rpm")} command={linuxCommand(rpm, d.config_string, d.ice_servers)} />}
       <div className="flex flex-wrap gap-2">
         <AssetLink asset={deb} label=".deb" />
         <AssetLink asset={rpm} label=".rpm" />

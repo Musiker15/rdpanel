@@ -271,6 +271,9 @@ describe("client options (WebRTC)", () => {
     });
     expect(clientOptionsInput({ ice_servers: "", congestion: "on" }).webrtc_congestion_control).toBe(true);
     expect(clientOptionsInput({ ice_servers: "", congestion: "off" }).webrtc_congestion_control).toBe(false);
+    // The install-command opt-in is sent only when the card knows it, so an old draft cannot reset it.
+    expect(clientOptionsInput({ ice_servers: "", congestion: "default", in_install: true })).toMatchObject({ ice_servers_in_install: true });
+    expect(clientOptionsInput({ ice_servers: "", congestion: "default" })).not.toHaveProperty("ice_servers_in_install");
   });
 });
 

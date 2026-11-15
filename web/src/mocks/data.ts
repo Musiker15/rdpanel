@@ -523,6 +523,8 @@ export const serverApplied: S["ServerSettingsValues"] = { ...serverDesired, tota
 export const clientOptions: S["ClientOptions"] = {
   ice_servers: "stun:stun.example.com:3478\nturn://rdpanel:example-secret@turn.example.com:3478",
   webrtc_congestion_control: null,
+  ice_servers_in_install: false,
+  devices_ignoring_ice: 3,
   pushed: true,
   modified_at: "2026-10-14T09:30:00Z",
 };

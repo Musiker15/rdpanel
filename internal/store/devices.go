@@ -306,6 +306,27 @@ func (r *Devices) List(ctx context.Context, p ListDevicesParams) ([]*Device, int
 	return out, total, mapErr(rows.Err())
 }
 
+// CountByClientVersion returns how many devices last reported each RustDesk
+// client version (devices that never reported one are left out).
+func (r *Devices) CountByClientVersion(ctx context.Context) (map[string]int, error) {
+	rows, err := r.q.QueryContext(ctx, `SELECT client_version, COUNT(*) FROM devices
+		WHERE client_version <> '' GROUP BY client_version`)
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var v string
+		var n int
+		if err := rows.Scan(&v, &n); err != nil {
+			return nil, mapErr(err)
+		}
+		out[v] = n
+	}
+	return out, mapErr(rows.Err())
+}
+
 // DevicesAtIP is what ListByLastSeenIPs found for one address.
 type DevicesAtIP struct {
 	// Devices are the most recently seen matches, at most perIP of them.

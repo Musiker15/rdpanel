@@ -39,13 +39,14 @@ export function findAsset(assets: ClientAsset[], id: string): ClientAsset | unde
  * like success. The block writes itself to a file and runs that elevated, so
  * the settings are actually applied.
  */
-export function windowsCommand(asset: ClientAsset, configString: string): string {
+export function windowsCommand(asset: ClientAsset, configString: string, iceServers?: string): string {
   const body = [
     "$ErrorActionPreference = 'Stop'",
     "[Net.ServicePointManager]::SecurityProtocol = 'Tls12'",
     `$url = '${asset.url}'`,
     ...(asset.sha256 ? [`$sha = '${asset.sha256.toUpperCase()}'`] : []),
     `$cfg = '${configString}'`,
+    ...(iceServers ? [`$ice = ${psQuote(iceServers)}`] : []),
     "# Any existing installation will do, whoever made it: the EXE installer, the",
     "# MSI (which is also what winget installs) or a per-user copy. They all land",
     "# in one of these folders or leave an uninstall entry behind, and --config",
@@ -89,17 +90,35 @@ export function windowsCommand(asset: ClientAsset, configString: string): string
     "  if (-not $exe) { throw 'RustDesk did not install' }",
     "}",
     "& $exe --config $cfg",
+    ...(iceServers ? [ICE_COMMENT_PS, "& $exe --option ice-servers $ice"] : []),
   ];
   return ["& {", ...body.map((l) => `  ${l}`), "}"].join("\n");
 }
 
+// RustDesk 1.5.3 ignores ice-servers sent by the panel in heartbeats; set at
+// install time, with administrator rights, it sticks.
+const ICE_COMMENT_PS = "# WebRTC ICE servers: RustDesk 1.5.3+ takes them only from here, not from the panel's heartbeats.";
+
+/** A PowerShell single-quoted string. */
+export function psQuote(s: string): string {
+  return `'${s.replaceAll("'", "''")}'`;
+}
+
+/** A POSIX shell single-quoted string. */
+export function shQuote(s: string): string {
+  return `'${s.replaceAll("'", `'\\''`)}'`;
+}
+
+const MACOS_BIN = "/Applications/RustDesk.app/Contents/MacOS/RustDesk";
+
 /** Applies the settings to an installed macOS client (Terminal). */
-export function macosCommand(configString: string): string {
-  return `sudo /Applications/RustDesk.app/Contents/MacOS/RustDesk --config '${configString}'`;
+export function macosCommand(configString: string, iceServers?: string): string {
+  const cmd = `sudo ${MACOS_BIN} --config '${configString}'`;
+  return iceServers ? `${cmd} && \\\n  sudo ${MACOS_BIN} --option ice-servers ${shQuote(iceServers)}` : cmd;
 }
 
 /** Download, verify, install and configure on Linux (deb: apt, rpm: dnf). */
-export function linuxCommand(asset: ClientAsset, configString: string): string {
+export function linuxCommand(asset: ClientAsset, configString: string, iceServers?: string): string {
   const deb = asset.name.endsWith(".deb");
   const file = deb ? "/tmp/rustdesk.deb" : "/tmp/rustdesk.rpm";
   const steps = [`curl -fL -o ${file} '${asset.url}'`];
@@ -107,6 +126,7 @@ export function linuxCommand(asset: ClientAsset, configString: string): string {
   steps.push(
     deb ? `sudo apt-get install -y ${file}` : `sudo dnf install -y ${file}`,
     `sudo rustdesk --config '${configString}'`,
+    ...(iceServers ? [`sudo rustdesk --option ice-servers ${shQuote(iceServers)}`] : []),
     "sudo systemctl restart rustdesk",
   );
   return steps.join(" && \\\n  ");

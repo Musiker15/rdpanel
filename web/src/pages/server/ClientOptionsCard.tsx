@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Save, Sparkles } from "lucide-react";
+import { Activity, Info, Save, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -9,7 +9,7 @@ import { ErrorState, RelativeTime, useToastError } from "@/components";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton, Textarea } from "@/components/ui/misc";
+import { Skeleton, Switch, Textarea } from "@/components/ui/misc";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Tri = "default" | "on" | "off";
@@ -17,6 +17,8 @@ type Tri = "default" | "on" | "off";
 interface Draft {
   ice_servers: string;
   congestion: Tri;
+  /** Also put the ICE servers into the install commands (opt-in). */
+  in_install?: boolean;
 }
 
 interface Preset {
@@ -54,7 +56,7 @@ const TURN = /^turns?:\/\/[^\s,:@/]+:[^\s,@/]+@[^\s,/@]+$/;
 
 function toDraft(o: ClientOptions): Draft {
   const c = o.webrtc_congestion_control;
-  return { ice_servers: o.ice_servers, congestion: c == null ? "default" : c ? "on" : "off" };
+  return { ice_servers: o.ice_servers, congestion: c == null ? "default" : c ? "on" : "off", in_install: o.ice_servers_in_install };
 }
 
 /** Splits the ICE server list like the server does (commas or newlines). Exported for tests. */
@@ -82,6 +84,7 @@ export function toInput(d: Draft): ClientOptionsInput {
   return {
     ice_servers: iceEntries(d.ice_servers).join("\n"),
     webrtc_congestion_control: d.congestion === "default" ? null : d.congestion === "on",
+    ...(d.in_install === undefined ? {} : { ice_servers_in_install: d.in_install }),
   };
 }
 
@@ -149,7 +152,7 @@ export function ClientOptionsCard() {
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
   if (!q.data || !draft) return <Skeleton className="h-48" />;
   const base = toDraft(q.data);
-  const dirty = draft.ice_servers !== base.ice_servers || draft.congestion !== base.congestion;
+  const dirty = draft.ice_servers !== base.ice_servers || draft.congestion !== base.congestion || draft.in_install !== base.in_install;
   const error = validateIceServers(draft.ice_servers);
 
   return (
@@ -213,7 +216,7 @@ export function ClientOptionsCard() {
             />
             {error && <p className="text-xs text-destructive">{t(error)}</p>}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <Button
                   type="button"
                   variant="outline"
@@ -257,6 +260,26 @@ export function ClientOptionsCard() {
                 ))}
               </div>
             )}
+            <div className="flex gap-2 rounded-md border bg-muted/40 p-2.5 text-xs text-muted-foreground">
+              <Info className="mt-0.5 size-3.5 shrink-0" />
+              <p>
+                {t("server.clientOptions.ice153.notice")}{" "}
+                {q.data.devices_ignoring_ice > 0 && t("server.clientOptions.ice153.devices", { count: q.data.devices_ignoring_ice })}
+              </p>
+            </div>
+            <div className="flex items-start justify-between gap-3 rounded-md border px-3 py-2.5">
+              <div className="space-y-0.5">
+                <label htmlFor="srv-ice_in_install" className="text-sm font-medium">
+                  {t("server.clientOptions.ice153.inInstall")}
+                </label>
+                <p className="text-xs text-muted-foreground">{t("server.clientOptions.ice153.inInstallHint")}</p>
+              </div>
+              <Switch
+                id="srv-ice_in_install"
+                checked={!!draft.in_install}
+                onCheckedChange={(v) => setDraft({ ...draft, in_install: v })}
+              />
+            </div>
           </div>
         </div>
         <div className="grid grid-cols-1 gap-2 py-4 md:grid-cols-[minmax(12rem,16rem)_1fr]">

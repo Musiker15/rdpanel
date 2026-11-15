@@ -724,6 +724,9 @@ export const handlers = [
       id_server: "desk.example.com",
       relay_server: "desk.example.com",
       api_server: "https://desk.example.com",
+      ...(db.clientOptions.ice_servers_in_install && db.clientOptions.ice_servers
+        ? { ice_servers: db.clientOptions.ice_servers.split(/\r?\n/).join(",") }
+        : {}),
       public_key: "MEbIUN8NZFq0Vu80BjNNIGDbQKdXxcg8QTbo69qrH+A=",
       config_string: "=0nI9Q2bu5yZsFGbi5SaoBnL0VmZ6ISdy5yckVGZiojIp1WYiwiI",
       windows_file_name: "rustdesk-licensed-=0nI9Q2bu5yZsFGbi5SaoBnL0VmZ6ISdy5yckVGZiojIp1WYiwiI.exe",
@@ -1564,6 +1567,7 @@ export const handlers = [
     Object.assign(db.clientOptions, {
       ice_servers: entries.join("\n"),
       webrtc_congestion_control: b.webrtc_congestion_control ?? null,
+      ice_servers_in_install: b.ice_servers_in_install ?? db.clientOptions.ice_servers_in_install,
       pushed: true,
       modified_at: new Date().toISOString(),
     });
