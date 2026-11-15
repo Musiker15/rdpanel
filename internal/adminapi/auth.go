@@ -198,7 +198,7 @@ func (c *authCore) handleLogin(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "username and password are required")
 		return
 	}
-	ipKey, uKey := limitIP+httpx.ClientIPString(r), userKey(req.Username)
+	ipKey, uKey := limitIP+httpx.ClientIPKey(r), userKey(req.Username)
 	if ok, wait := c.allow(ipKey, uKey); !ok {
 		c.d.Telemetry.Login(metrics.SurfacePanel, metrics.MethodPassword, metrics.ResultRateLimited)
 		rateLimited(w, wait)
@@ -379,7 +379,7 @@ func (c *authCore) handleMFA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	uKey := userKey(s.User.Username)
-	ipKey := limitIP + httpx.ClientIPString(r)
+	ipKey := limitIP + httpx.ClientIPKey(r)
 	if ok, wait := c.allow(ipKey, uKey); !ok {
 		c.d.Telemetry.Login(metrics.SurfacePanel, metrics.MethodTOTP, metrics.ResultRateLimited)
 		rateLimited(w, wait)

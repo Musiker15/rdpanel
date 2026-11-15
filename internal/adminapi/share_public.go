@@ -142,7 +142,7 @@ func validShareToken(s string) bool {
 // the HTTP status to answer instead: 404 (unknown token, counted towards the
 // caller's backoff), 429 (backoff) or 500.
 func (h *sharePublic) lookup(r *http.Request) (*store.ServerShareLink, store.ShareLinkStatus, int, time.Duration) {
-	key := shareLimitKey + httpx.ClientIPString(r)
+	key := shareLimitKey + httpx.ClientIPKey(r)
 	if h.d.Limiter != nil {
 		if ok, wait := h.d.Limiter.Allow(key); !ok {
 			return nil, "", http.StatusTooManyRequests, wait

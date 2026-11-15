@@ -72,7 +72,7 @@ func (l *RateLimiter) Allow(key string) bool {
 func RateLimit(l *RateLimiter, retryAfter string, reject http.HandlerFunc) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !l.Allow(ClientIPString(r)) {
+			if !l.Allow(ClientIPKey(r)) {
 				w.Header().Set("Retry-After", retryAfter)
 				reject(w, r)
 				return

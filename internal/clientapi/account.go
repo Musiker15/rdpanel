@@ -72,8 +72,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid request")
 		return
 	}
-	ip := httpx.ClientIPString(r)
-	ipKey := "clientapi.login.ip:" + ip
+	ipKey := "clientapi.login.ip:" + httpx.ClientIPKey(r)
 	userKey := "clientapi.login.user:" + strings.ToLower(strings.TrimSpace(req.Username))
 	// factor is the step this request performs (metrics label).
 	factor := metrics.MethodPassword

@@ -124,7 +124,7 @@ func (c *authCore) handleForgotPassword(w http.ResponseWriter, r *http.Request) 
 		httpx.WriteError(w, http.StatusConflict, "password_reset_unavailable", "password reset by e-mail is not available")
 		return
 	}
-	key := limitForgot + httpx.ClientIPString(r)
+	key := limitForgot + httpx.ClientIPKey(r)
 	if ok, wait := c.allow(key); !ok {
 		rateLimited(w, wait)
 		return
@@ -151,7 +151,7 @@ func (c *authCore) handleResetPasswordByEmail(w http.ResponseWriter, r *http.Req
 		validationFailed(w, "invalid password", map[string]string{"new_password": "must be at least 8 characters"})
 		return
 	}
-	key := limitForgot + httpx.ClientIPString(r)
+	key := limitForgot + httpx.ClientIPKey(r)
 	if ok, wait := c.allow(key); !ok {
 		rateLimited(w, wait)
 		return

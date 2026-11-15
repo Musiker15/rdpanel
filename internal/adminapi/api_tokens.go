@@ -39,7 +39,7 @@ func bearerFrom(r *http.Request) (string, bool) {
 // rate-limited per client IP like logins; the token is never logged.
 func (m *sessions) loadAPIToken(w http.ResponseWriter, r *http.Request, next http.Handler, plain string) {
 	ctx := r.Context()
-	key := limitAPIToken + httpx.ClientIPString(r)
+	key := limitAPIToken + httpx.ClientIPKey(r)
 	if ok, wait := m.limiter.Allow(key); !ok {
 		m.d.Telemetry.APITokenAuth(metrics.ResultRateLimited)
 		rateLimited(w, wait)
