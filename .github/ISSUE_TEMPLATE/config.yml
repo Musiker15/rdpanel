@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/bropines/rdpanel/blob/main/SECURITY.md
+    about: Please report security problems privately, not as an issue.
+  - name: Documentation
+    url: https://github.com/bropines/rdpanel/tree/main/docs
+    about: Deployment, configuration, relays, OIDC and more.

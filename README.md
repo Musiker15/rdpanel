@@ -228,6 +228,7 @@ The database schema is documented in [`docs/schema.md`](docs/schema.md).
 - Releases: <https://github.com/bropines/rdpanel/releases>
 - Container image: <https://github.com/bropines/rdpanel/pkgs/container/rdpanel>
 - Issues: <https://github.com/bropines/rdpanel/issues>
+- Contributing: [CONTRIBUTING.md](CONTRIBUTING.md) · Security: [SECURITY.md](SECURITY.md) · [Code of conduct](CODE_OF_CONDUCT.md)
 - hbbs/hbbr fork: <https://github.com/bropines/rustdesk-server>
 - RustDesk: <https://github.com/rustdesk/rustdesk>, <https://github.com/rustdesk/rustdesk-server>
 - Prior art: [lejianwen/rustdesk-api](https://github.com/lejianwen/rustdesk-api),
