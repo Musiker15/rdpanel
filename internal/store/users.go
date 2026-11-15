@@ -233,6 +233,18 @@ func (r *Users) Update(ctx context.Context, u *User) error {
 		toMs(u.UpdatedAt), u.ID))
 }
 
+// UpdateProfile writes only the fields a user edits on their own profile
+// (display name, e-mail, locale), with the e-mail rules of Update. Writing the
+// whole row from the session's snapshot would put back a role, status or
+// totp_required an admin changed while the request was in flight.
+func (r *Users) UpdateProfile(ctx context.Context, id int64, displayName, email, locale string) error {
+	return expectOne(r.q.ExecContext(ctx, `UPDATE users SET email = ?, display_name = ?, locale = ?,
+		email_verified_at = CASE WHEN coalesce(email, '') = coalesce(?, '') COLLATE NOCASE THEN email_verified_at END,
+		email_2fa_enabled = CASE WHEN coalesce(email, '') = coalesce(?, '') COLLATE NOCASE THEN email_2fa_enabled ELSE 0 END,
+		updated_at = ? WHERE id = ?`,
+		nullStr(email), displayName, nullStr(locale), nullStr(email), nullStr(email), toMs(r.now()), id))
+}
+
 // SetEmailVerified marks the user's address verified (at != nil) or not.
 // Verification applies only while the stored address equals email
 // (case-insensitive); otherwise ErrNotFound. Clearing it also turns e-mail

@@ -96,7 +96,9 @@ func (c *authCore) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 		validationFailed(w, "invalid profile", f)
 		return
 	}
-	if err := c.d.Store.Users.Update(ctx, &u); err != nil {
+	// Only the profile fields: the session holds a snapshot of the user, and
+	// writing all of it back would undo a role or status change made since.
+	if err := c.d.Store.Users.UpdateProfile(ctx, u.ID, u.DisplayName, u.Email, u.Locale); err != nil {
 		internalError(w)
 		return
 	}
