@@ -97,14 +97,15 @@ jobs:
         run: |
           test -s db_v2.sqlite3 || { echo "::error::db_v2.sqlite3 missing in $SERVER_REPO@$SERVER_REF (sqlx needs it)"; exit 1; }
           grep -q '^DATABASE_URL=' .env || { echo "::error::.env with DATABASE_URL missing in $SERVER_REPO@$SERVER_REF"; exit 1; }
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: rustdesk-server
           key: ${{ matrix.target }}
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2
         with:
           tool: cross
       - name: cross build
@@ -146,17 +147,17 @@ jobs:
       - run: chmod 0755 deploy/bin/*/* && ls -l deploy/bin/*
       # Only the final stage's few RUN steps execute on the target platform;
       # web/Go/s6 stages run on the build platform.
-      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
         with: { platforms: arm64 }
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         if: env.PUSH == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.IMAGE }}
           flavor: latest=false
@@ -173,7 +174,7 @@ jobs:
           annotations: |
             org.opencontainers.image.licenses=MIT AND AGPL-3.0-only
       - id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: deploy/Dockerfile
