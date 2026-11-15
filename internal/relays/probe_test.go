@@ -18,7 +18,9 @@ func TestProbeOK(t *testing.T) {
 	fr := hbbstest.NewFakeRelay(t, testKey)
 	p := &Prober{Timeout: 3 * time.Second}
 	res := p.Probe(context.Background(), fr.Addr(), testKey, true)
-	if !res.OK() || res.RTT <= 0 {
+	// RTT may be 0: on loopback the round trip fits inside one tick of the
+	// Windows clock, so only a negative value means it was not measured.
+	if !res.OK() || res.RTT < 0 {
 		t.Fatalf("probe: %+v", res)
 	}
 	if fr.Paired.Load() != 1 {
