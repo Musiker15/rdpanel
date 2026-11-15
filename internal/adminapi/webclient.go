@@ -43,6 +43,10 @@ type webClientServerDTO struct {
 }
 
 func (c *b2bCore) registerWebClient(r chi.Router) {
+	// The browser client only: config mints a client JWT and the credentials
+	// are remembered device passwords, neither of which an API token (even a
+	// read-only one) should get.
+	r = r.With(requireCookieSession)
 	r.With(RequireUser).Get("/webclient/config", c.handleWebClientConfig)
 	r.With(RequireUser).Get("/webclient/credentials/{peer}", c.handleWebClientCredentials)
 	r.With(RequireUser).Put("/webclient/credentials/{peer}", c.handleWebClientRemember)

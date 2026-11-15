@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
@@ -55,6 +56,31 @@ type Argon2Params struct {
 // on a small server (64 MiB, 2 passes, 2 lanes).
 var DefaultArgon2Params = Argon2Params{Memory: 64 * 1024, Time: 2, Threads: 2, SaltLen: 16, KeyLen: 32}
 
+// argon2Slots caps how many argon2id computations run at once. Each one
+// allocates Params.Memory (64 MiB by default), and the login and password
+// reset endpoints run one per request before any failure is recorded, so a
+// burst of parallel requests could otherwise exhaust the server's memory.
+// Requests over the cap wait for a slot.
+var argon2Slots = make(chan struct{}, argon2SlotCount(runtime.GOMAXPROCS(0)))
+
+// argon2SlotCount is how many argon2id computations may run at once with
+// procs usable CPUs. Each one already keeps DefaultArgon2Params.Threads lanes
+// busy, so more than procs/Threads at a time adds memory, not throughput.
+// GOMAXPROCS rather than NumCPU, because it follows a container's CPU limit.
+// The ceiling keeps the worst case near 256 MiB however large the host.
+func argon2SlotCount(procs int) int {
+	return min(4, max(2, procs/int(DefaultArgon2Params.Threads)))
+}
+
+// idKey is argon2.IDKey; tests swap it to observe concurrency.
+var idKey = argon2.IDKey
+
+func argon2IDKey(password, salt []byte, p Argon2Params) []byte {
+	argon2Slots <- struct{}{}
+	defer func() { <-argon2Slots }()
+	return idKey(password, salt, p.Time, p.Memory, p.Threads, p.KeyLen)
+}
+
 // Hasher hashes and verifies passwords.
 type Hasher struct {
 	Params Argon2Params
@@ -76,7 +102,7 @@ func (h *Hasher) Hash(password string) (string, Algo, error) {
 	if err != nil {
 		return "", AlgoNone, err
 	}
-	key := argon2.IDKey([]byte(password), salt, p.Time, p.Memory, p.Threads, p.KeyLen)
+	key := argon2IDKey([]byte(password), salt, p)
 	enc := base64.RawStdEncoding
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version, p.Memory, p.Time, p.Threads, enc.EncodeToString(salt), enc.EncodeToString(key)), AlgoArgon2id, nil
@@ -137,7 +163,7 @@ func verifyArgon2id(hash, password string) bool {
 	if err != nil {
 		return false
 	}
-	got := argon2.IDKey([]byte(password), salt, p.Time, p.Memory, p.Threads, p.KeyLen)
+	got := argon2IDKey([]byte(password), salt, p)
 	return subtle.ConstantTimeCompare(got, key) == 1
 }
 

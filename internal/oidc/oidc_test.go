@@ -5,9 +5,12 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"fmt"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -52,6 +55,7 @@ type env struct {
 	h        http.Handler
 	jwt      *auth.ClientJWT
 	webUsers []*store.User
+	factor   *fakeFactor
 }
 
 func newEnv(t *testing.T, mutate func(p *store.IdentityProvider)) *env {
@@ -63,7 +67,7 @@ func newEnv(t *testing.T, mutate func(p *store.IdentityProvider)) *env {
 	aead, _ := crypto.NewAEAD(key)
 	jwtSvc, _ := auth.NewClientJWT([]byte("jwt-key"), clk.now)
 
-	e := &env{t: t, st: st, clk: clk, jwt: jwtSvc}
+	e := &env{t: t, st: st, clk: clk, jwt: jwtSvc, factor: &fakeFactor{totp: map[int64]string{}, email: map[int64]bool{}}}
 	e.idp = oidctest.New(t, "panel-client", "s3cr3t")
 	e.idp.Now = clk.now
 	e.gh = oidctest.NewGitHub(t, "gh-client", "gh-secret")
@@ -86,6 +90,11 @@ func newEnv(t *testing.T, mutate func(p *store.IdentityProvider)) *env {
 			e.webUsers = append(e.webUsers, u)
 			http.Redirect(w, r, next, http.StatusFound)
 		},
+		SecondFactor: e.factor,
+		EmailFactor: func(_ context.Context, u *store.User) (bool, error) {
+			return e.factor.email[u.ID], nil
+		},
+		Limiter: auth.NewBackoff(auth.DefaultBackoffConfig, clk.now),
 	})
 	r := chi.NewRouter()
 	r.Route("/api", func(api chi.Router) { oidc.Register(api, oidc.RouteDeps{Service: e.svc}) })
@@ -173,7 +182,33 @@ func (e *env) clientLogin(op string, id oidctest.Identity) (code string, cb *htt
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	return code, e.callback(q)
+	return code, e.confirmIfAsked(e.callback(q))
+}
+
+var confirmTokenRe = regexp.MustCompile(`name="token" value="([^"]+)"`)
+
+// confirm posts the confirmation form of page with action and code.
+func (e *env) confirm(page *httptest.ResponseRecorder, action, code string) *httptest.ResponseRecorder {
+	e.t.Helper()
+	m := confirmTokenRe.FindStringSubmatch(page.Body.String())
+	if m == nil {
+		e.t.Fatalf("no confirmation form: %d %s", page.Code, page.Body.String())
+	}
+	form := url.Values{"token": {html.UnescapeString(m[1])}, "action": {action}, "code": {code}}
+	req := httptest.NewRequest("POST", "/api/oidc/confirm", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	e.h.ServeHTTP(rec, req)
+	return rec
+}
+
+// confirmIfAsked approves the sign-in when cb is the confirmation page.
+func (e *env) confirmIfAsked(cb *httptest.ResponseRecorder) *httptest.ResponseRecorder {
+	e.t.Helper()
+	if cb.Code != 200 || !confirmTokenRe.MatchString(cb.Body.String()) {
+		return cb
+	}
+	return e.confirm(cb, "approve", "")
 }
 
 const pendingBody = `{"error":"No authed oidc is found"}`
@@ -217,8 +252,21 @@ func TestClientFlowEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	cb := e.callback(q)
+	if cb.Code != 200 || !strings.Contains(cb.Body.String(), "Sign in to RustDesk?") || !strings.Contains(cb.Body.String(), "123456789") {
+		t.Fatalf("confirmation page: %d %s", cb.Code, cb.Body.String())
+	}
+	// Nothing for the client until the sign-in is confirmed in this browser.
+	if got := e.poll(code, "123456789", "dXVpZA=="); got != pendingBody {
+		t.Fatalf("before confirmation: %s", got)
+	}
+	page := cb
+	cb = e.confirm(page, "approve", "")
 	if cb.Code != 200 || !strings.Contains(cb.Body.String(), "Signed in") {
-		t.Fatalf("callback: %d %s", cb.Code, cb.Body.String())
+		t.Fatalf("confirm: %d %s", cb.Code, cb.Body.String())
+	}
+	// The form is single-use.
+	if rec := e.confirm(page, "approve", ""); rec.Code != 400 {
+		t.Fatalf("confirm replay: %d", rec.Code)
 	}
 	// Replayed callback (same state) is refused.
 	if rec := e.callback(q); rec.Code != 400 {
@@ -310,15 +358,18 @@ func TestLinkingRules(t *testing.T) {
 		linkEmail  bool
 		autoReg    bool
 		verified   bool
+		panelOK    bool   // the existing user's address is verified in the panel
 		wantUser   string // "existing", "new", "" (error)
 		wantErrSub string
 	}
 	cases := []tc{
-		{"verified email links when enabled", true, false, true, "existing", ""},
-		{"unverified email never links", true, false, false, "", "No account is linked"},
-		{"unverified email + auto-register creates a new user", true, true, false, "new", ""},
-		{"verified email but linking disabled", false, false, true, "", "No account is linked"},
-		{"linking disabled + auto-register creates new user", false, true, true, "new", ""},
+		{"verified email links when enabled", true, false, true, true, "existing", ""},
+		{"unverified email never links", true, false, false, true, "", "No account is linked"},
+		{"unverified email + auto-register creates a new user", true, true, false, true, "new", ""},
+		{"verified email but linking disabled", false, false, true, true, "", "No account is linked"},
+		{"linking disabled + auto-register creates new user", false, true, true, true, "new", ""},
+		// The panel must have verified the address too.
+		{"address not verified in the panel never links", true, true, true, false, "", "not verified in the panel"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -326,6 +377,12 @@ func TestLinkingRules(t *testing.T) {
 				p.LinkByVerifiedEmail, p.AutoRegister = c.linkEmail, c.autoReg
 			})
 			existing := e.user("bob", "Bob@Example.test")
+			if c.panelOK {
+				at := e.clk.now()
+				if err := e.st.Users.SetEmailVerified(context.Background(), existing.ID, existing.Email, &at); err != nil {
+					t.Fatal(err)
+				}
+			}
 			code, cb := e.clientLogin("authentik", oidctest.Identity{Subject: "sub-bob", Email: "bob@example.test",
 				EmailVerified: c.verified, PreferredUsername: "bob", Name: "Bob"})
 			if cb.Code != 200 {
@@ -605,5 +662,112 @@ func TestNotConfiguredWithoutPublicURL(t *testing.T) {
 	svc := oidc.NewService(oidc.Options{Store: e.st, JWT: e.jwt})
 	if _, _, err := svc.BeginClient(context.Background(), "authentik", oidc.ClientDevice{ID: "1", UUID: "u"}); err != oidc.ErrNotConfigured {
 		t.Fatalf("%v", err)
+	}
+}
+
+// fakeFactor is the panel's TOTP and e-mail factor: totp holds the one valid
+// code of each enrolled user.
+type fakeFactor struct {
+	totp  map[int64]string
+	email map[int64]bool
+}
+
+func (f *fakeFactor) Enrolled(_ context.Context, userID int64) (bool, error) {
+	_, ok := f.totp[userID]
+	return ok, nil
+}
+
+func (f *fakeFactor) Verify(_ context.Context, userID int64, code string) (bool, error) {
+	want, ok := f.totp[userID]
+	return ok && code == want, nil
+}
+
+// A client sign-in through an IdP is confirmed on a page naming the device,
+// asks for the TOTP code of an account that has one, and is refused for an
+// account that signs in with e-mailed codes.
+func TestClientFlowConfirmation(t *testing.T) {
+	e := newEnv(t, nil)
+	ctx := context.Background()
+	link := func(name string) *store.User {
+		u := e.user(name, name+"@example.test")
+		if err := e.st.UserIdentities.Create(ctx, &store.UserIdentity{UserID: u.ID, ProviderID: e.prov.ID, Subject: "sub-" + name}); err != nil {
+			t.Fatal(err)
+		}
+		return u
+	}
+	signIn := func(name string) (string, *httptest.ResponseRecorder) {
+		t.Helper()
+		code, authURL := e.startClient("authentik")
+		q, err := e.idp.Authorize(authURL, oidctest.Identity{Subject: "sub-" + name})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return code, e.callback(q)
+	}
+
+	// Cancel: the client gets an error, the form is spent.
+	link("carol")
+	code, page := signIn("carol")
+	if rec := e.confirm(page, "cancel", ""); rec.Code != 200 || !strings.Contains(rec.Body.String(), "cancelled") {
+		t.Fatalf("cancel: %d %s", rec.Code, rec.Body.String())
+	}
+	if m := pollResult(t, e, code); !strings.Contains(fmt.Sprint(m["error"]), "cancelled") {
+		t.Fatalf("after cancel: %v", m)
+	}
+	if rec := e.confirm(page, "approve", ""); rec.Code != 400 {
+		t.Fatalf("approve after cancel: %d", rec.Code)
+	}
+
+	// TOTP: the code is asked for, a wrong one keeps the flow pending.
+	dave := link("dave")
+	e.factor.totp[dave.ID] = "123456"
+	code, page = signIn("dave")
+	if !strings.Contains(page.Body.String(), `name="code"`) {
+		t.Fatalf("no code field: %s", page.Body.String())
+	}
+	if rec := e.confirm(page, "approve", "000000"); rec.Code != 401 || !strings.Contains(rec.Body.String(), "Invalid verification code") {
+		t.Fatalf("wrong code: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := e.poll(code, "123456789", "dXVpZA=="); got != pendingBody {
+		t.Fatalf("after a wrong code: %s", got)
+	}
+	if rec := e.confirm(page, "approve", "123456"); rec.Code != 200 || !strings.Contains(rec.Body.String(), "Signed in") {
+		t.Fatalf("right code: %d %s", rec.Code, rec.Body.String())
+	}
+	if m := pollResult(t, e, code); m["access_token"] == nil {
+		t.Fatalf("token after TOTP: %v", m)
+	}
+	// Codes are bounded per user, shared with the panel and the client API.
+	code, page = signIn("dave")
+	last := 0
+	for range auth.SecondFactorLimit + 1 {
+		last = e.confirm(page, "approve", "000000").Code
+	}
+	if last != 429 {
+		t.Fatalf("code attempts not bounded: last status %d", last)
+	}
+	_ = code
+
+	// E-mail factor: refused, nothing to confirm.
+	erin := link("erin")
+	e.factor.email[erin.ID] = true
+	code, page = signIn("erin")
+	if page.Code != 403 || confirmTokenRe.MatchString(page.Body.String()) || !strings.Contains(page.Body.String(), "e-mail") {
+		t.Fatalf("e-mail factor: %d %s", page.Code, page.Body.String())
+	}
+	if m := pollResult(t, e, code); m["access_token"] != nil {
+		t.Fatalf("token for an e-mail factor account: %v", m)
+	}
+
+	// A forged or tampered token is refused.
+	for _, tok := range []string{"", "bm90LWEtdG9rZW4", strings.Repeat("A", 600)} {
+		form := url.Values{"token": {tok}, "action": {"approve"}}
+		req := httptest.NewRequest("POST", "/api/oidc/confirm", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		e.h.ServeHTTP(rec, req)
+		if rec.Code != 400 {
+			t.Fatalf("token %q: %d", tok, rec.Code)
+		}
 	}
 }

@@ -88,7 +88,8 @@ func (a *App) Handler() http.Handler {
 			Store: a.Store, AEAD: a.AEAD, JWT: a.JWT, Log: a.Log.With("component", "oidc"),
 			PublicURL: cfg.PublicURL, AdminURL: cfg.AdminURL, TokenLifetime: cfg.Auth.TokenLifetime, JWTLifetime: cfg.Auth.JWTLifetime,
 			SecureCookies: cfg.AdminHTTPS(), WebLogin: adminapi.OIDCWebLogin(adminDeps),
-			Telemetry: a.Telemetry,
+			Telemetry:    a.Telemetry,
+			SecondFactor: clientTOTP{a.TOTP}, EmailFactor: a.Mail.LoginFactorRequired, Limiter: a.Limiter,
 		})
 		adminDeps.OIDC = oidcSvc
 		shareDeps = adminDeps

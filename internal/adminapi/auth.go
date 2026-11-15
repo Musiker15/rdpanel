@@ -198,8 +198,8 @@ func (c *authCore) handleLogin(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "username and password are required")
 		return
 	}
-	ipKey, uKey := limitIP+httpx.ClientIPString(r), userKey(req.Username)
-	if ok, wait := c.allow(ipKey, uKey); !ok {
+	ipKey, uKey := limitIP+httpx.ClientIPKey(r), userKey(req.Username)
+	if ok, wait := c.allow(ipKey); !ok {
 		c.d.Telemetry.Login(metrics.SurfacePanel, metrics.MethodPassword, metrics.ResultRateLimited)
 		rateLimited(w, wait)
 		return
@@ -209,6 +209,15 @@ func (c *authCore) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		c.d.Log.ErrorContext(ctx, "login: load user", slog.Any("err", err))
 		internalError(w)
+		return
+	}
+	// The per-name backoff stops guessing one account from many addresses,
+	// but anyone who knows a login name could keep it locked. It does not
+	// apply on a network the user signed in from lately (the per-IP backoff
+	// above still does).
+	if ok, wait := c.allow(uKey); !ok && !loginlog.KnownNetwork(ctx, c.d.Store, user, r) {
+		c.d.Telemetry.Login(metrics.SurfacePanel, metrics.MethodPassword, metrics.ResultRateLimited)
+		rateLimited(w, wait)
 		return
 	}
 	// localOK: the password matched the stored local hash (not LDAP).
@@ -379,8 +388,16 @@ func (c *authCore) handleMFA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	uKey := userKey(s.User.Username)
-	ipKey := limitIP + httpx.ClientIPString(r)
+	ipKey := limitIP + httpx.ClientIPKey(r)
 	if ok, wait := c.allow(ipKey, uKey); !ok {
+		c.d.Telemetry.Login(metrics.SurfacePanel, metrics.MethodTOTP, metrics.ResultRateLimited)
+		rateLimited(w, wait)
+		return
+	}
+	// Counted before the check, per user and shared with the client API: the
+	// backoff above only sees failures already recorded, so a parallel burst
+	// of codes would all get through it.
+	if ok, wait := auth.ReserveSecondFactor(c.limiter, s.User.ID); !ok {
 		c.d.Telemetry.Login(metrics.SurfacePanel, metrics.MethodTOTP, metrics.ResultRateLimited)
 		rateLimited(w, wait)
 		return
@@ -403,6 +420,7 @@ func (c *authCore) handleMFA(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusUnauthorized, "code_invalid", "invalid or expired code")
 			return
 		}
+		auth.ReleaseSecondFactor(c.limiter, s.User.ID)
 		c.completeLogin(w, r, s.User, loginlog.MethodPassword, metrics.MethodEmail, ipKey, uKey)
 		return
 	}
@@ -419,6 +437,7 @@ func (c *authCore) handleMFA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// sess.create revokes the pending session (rotation).
+	auth.ReleaseSecondFactor(c.limiter, s.User.ID)
 	c.completeLogin(w, r, s.User, loginlog.MethodPassword, metrics.MethodTOTP, ipKey, uKey)
 }
 

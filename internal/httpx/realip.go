@@ -190,3 +190,35 @@ func AllowIPs(allowed []netip.Prefix) func(http.Handler) http.Handler {
 		})
 	}
 }
+
+// ClientIPKey is the client address as a rate-limit key: an IPv4 address
+// as is, an IPv6 address as its /64. A single IPv6 host usually gets a whole
+// /64, so keying per address gave it an unlimited budget of fresh keys.
+func ClientIPKey(r *http.Request) string {
+	return IPKey(ClientIP(r))
+}
+
+// IPKeyString is IPKey of a stored address string (s itself when unparsable).
+func IPKeyString(s string) string {
+	a, err := netip.ParseAddr(strings.TrimSpace(s))
+	if err != nil {
+		return s
+	}
+	return IPKey(a)
+}
+
+// IPKey is an IPv4 address as is and an IPv6 address as its /64 ("" invalid).
+func IPKey(a netip.Addr) string {
+	if !a.IsValid() {
+		return ""
+	}
+	a = a.Unmap()
+	if a.Is4() {
+		return a.String()
+	}
+	p, err := a.Prefix(64)
+	if err != nil {
+		return a.String()
+	}
+	return p.String()
+}

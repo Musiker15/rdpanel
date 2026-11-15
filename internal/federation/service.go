@@ -460,7 +460,7 @@ func (s *Service) RegisterPublic(r chi.Router, limiter auth.Limiter) {
 func (s *Service) requireToken(limiter auth.Limiter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			key := limiterKeyPrefix + httpx.ClientIPString(r)
+			key := limiterKeyPrefix + httpx.ClientIPKey(r)
 			if limiter != nil {
 				if ok, wait := limiter.Allow(key); !ok {
 					w.Header().Set("Retry-After", strconv.Itoa(max(1, int(math.Ceil(wait.Seconds())))))

@@ -343,3 +343,41 @@ func TestAdminAuditAndTx(t *testing.T) {
 		t.Fatalf("purge = %d", n)
 	}
 }
+
+// UpdateProfile writes the profile fields only: a role or status change made
+// after the caller read the user survives it.
+func TestUsersUpdateProfileKeepsAdminFields(t *testing.T) {
+	s, _ := newTestStore(t)
+	ctx := context.Background()
+	u := &User{Username: "bob", Email: "bob@example.test", Role: RoleAdmin}
+	if err := s.Users.Create(ctx, u); err != nil {
+		t.Fatal(err)
+	}
+	verified := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	if err := s.Users.SetEmailVerified(ctx, u.ID, u.Email, &verified); err != nil {
+		t.Fatal(err)
+	}
+	// An admin demotes and disables bob while his own profile edit is in flight.
+	demoted, _ := s.Users.GetByID(ctx, u.ID)
+	demoted.Role, demoted.Status, demoted.TOTPRequired = RoleUser, UserDisabled, true
+	if err := s.Users.Update(ctx, demoted); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Users.UpdateProfile(ctx, u.ID, "Bob B.", "BOB@example.test", "ru"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.Users.GetByID(ctx, u.ID)
+	if got.Role != RoleUser || got.Status != UserDisabled || !got.TOTPRequired {
+		t.Fatalf("admin fields undone: %+v", got)
+	}
+	if got.DisplayName != "Bob B." || got.Email != "BOB@example.test" || got.Locale != "ru" || !got.EmailVerified() {
+		t.Fatalf("profile %+v", got)
+	}
+	// A new address drops the verification, as Update does.
+	if err := s.Users.UpdateProfile(ctx, u.ID, "Bob B.", "other@example.test", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Users.GetByID(ctx, u.ID); got.EmailVerified() || got.Locale != "" {
+		t.Fatalf("after address change %+v", got)
+	}
+}

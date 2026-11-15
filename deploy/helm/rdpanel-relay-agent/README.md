@@ -44,6 +44,7 @@ helm install relay-nl ./deploy/helm/rdpanel-relay-agent \
 | `persistence.enabled` | Persist agent ed25519 identity key and config | `true` |
 | `service.type` | Service type (`LoadBalancer`, `NodePort`, `ClusterIP`) | `LoadBalancer` |
 | `podSecurityContext`, `securityContext` | s6-overlay's `/init` starts as root and drops to `PUID:PGID` (10001) for the agent and hbbr; capabilities are limited to `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETGID`, `SETUID`, `KILL` | see `values.yaml` |
+| `podAnnotations` | keeps Istio and Linkerd sidecars out: hbbr accepts its admin console from loopback, where a sidecar delivers outside connections; enable one only with 21117-21119 excluded from interception | `sidecar.istio.io/inject: "false"`, `linkerd.io/inject: disabled` |
 
 ## Monitoring
 

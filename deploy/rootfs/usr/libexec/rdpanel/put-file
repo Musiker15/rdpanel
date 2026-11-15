@@ -1,0 +1,21 @@
+#!/bin/sh
+# Usage: put-file <file> <mode>   (content on stdin)
+#
+# Replaces <file> with the content of stdin, readers never seeing half of it.
+# key-secret runs as root and writes into /data, which belongs to PUID: a
+# fixed temporary name there, or a write to <file> itself, would follow a
+# symlink that an unprivileged process left under that name. mktemp creates
+# a new file (O_EXCL, never through a link), the mode is set on that file,
+# and the rename replaces whatever <file> was, a symlink included, without
+# following it.
+set -eu
+f=${1:?usage: put-file <file> <mode>}
+mode=${2:?usage: put-file <file> <mode>}
+dir=$(dirname "$f")
+mkdir -p "$dir"
+tmp=$(mktemp "$dir/.$(basename "$f").XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+cat > "$tmp"
+chmod "$mode" "$tmp"
+mv -f "$tmp" "$f"
+trap - EXIT

@@ -42,7 +42,14 @@ serviceAccount:
   annotations: {}
   name: ""
 
-podAnnotations: {}
+# -- Pod annotations. The defaults keep service-mesh sidecars out: hbbs and hbbr run
+# their admin console for connections from loopback (upstream behaviour), and an
+# Istio or Linkerd sidecar hands every outside connection over from loopback, which
+# would open that console to anyone who reaches the ports. Set a key to null only
+# with the ports 21115-21119 excluded from interception.
+podAnnotations:
+  sidecar.istio.io/inject: "false"
+  linkerd.io/inject: disabled
 podLabels: {}
 
 # Pod securityContext. The image's entrypoint is s6-overlay's /init, which

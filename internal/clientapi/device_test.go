@@ -31,8 +31,21 @@ func TestSysinfo(t *testing.T) {
 	if d.Hostname != "HOST2" || d.OSUsername != "alice" {
 		t.Fatalf("update %+v", d)
 	}
-	// Unowned device: uuid may change.
-	e.mustDo("POST", "/api/sysinfo", `{"id":"123456789","uuid":"bmV3"}`, "", 200)
+	// Unowned device: an anonymous caller may not change the uuid either, or
+	// the next login with the new uuid would bind it to whoever sent it.
+	e.mustDo("POST", "/api/sysinfo", `{"id":"123456789","uuid":"bmV3"}`, "", 403)
+	other := e.user("other", "pw-other-12345", nil)
+	otherTok := e.login("other", "pw-other-12345", "123456789", "bmV3")
+	d, _ = e.st.Devices.GetByRustdeskID(ctx, "123456789")
+	if d.UUID != "dXVpZA==" || d.OwnerUserID != nil {
+		t.Fatalf("unowned device taken over: uuid %q owner %v (other %d)", d.UUID, d.OwnerUserID, other.ID)
+	}
+	// ...nor a signed-in user who does not own it.
+	e.mustDo("POST", "/api/sysinfo", `{"id":"123456789","uuid":"bmV3"}`, otherTok, 403)
+	// An admin may.
+	e.user("adm", "pw-adm-12345", func(u *store.User) { u.Role = store.RoleAdmin })
+	admTok := e.login("adm", "pw-adm-12345", "999999999", "YWRt")
+	e.mustDo("POST", "/api/sysinfo", `{"id":"123456789","uuid":"bmV3"}`, admTok, 200)
 
 	// Owned device: uuid change refused unless the owner's token is presented.
 	u := e.user("own", "pw-own-12345", nil)
@@ -226,5 +239,92 @@ func TestKickQueue(t *testing.T) {
 	clk.advance(2 * time.Minute)
 	if q.Len() != 0 || q.Take("c", []int32{1}) != nil {
 		t.Fatal("expired kick delivered")
+	}
+}
+
+// Sysinfo presets come without a sign-in: they never make an admin the owner,
+// never change an entry already in an address book, and are off entirely with
+// clients.sysinfo_presets=false.
+func TestSysinfoPresetsAreLimited(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	admin := e.user("boss", "pw-boss-12345", func(u *store.User) { u.Role = store.RoleAdmin })
+	book := &store.AddressBook{OwnerUserID: admin.ID, Name: "Servers"}
+	_ = e.st.AddressBooks.Create(ctx, book)
+	pw, alias := "real-pw", "Prod DB"
+	if _, err := e.st.AddressBooks.UpsertEntry(ctx, book.ID, "424242", store.ABEntryPatch{Alias: &alias, Password: &pw}); err != nil {
+		t.Fatal(err)
+	}
+
+	e.mustDo("POST", "/api/sysinfo", `{"id":"424242","uuid":"YQ==","preset-user-name":"boss",
+		"preset-address-book-name":"Servers","preset-address-book-alias":"Prod DB (new)","preset-address-book-password":"evil"}`, "", 200)
+	d, _ := e.st.Devices.GetByRustdeskID(ctx, "424242")
+	if d.OwnerUserID != nil {
+		t.Fatalf("preset made an admin the owner: %v", *d.OwnerUserID)
+	}
+	en, err := e.st.AddressBooks.GetEntry(ctx, book.ID, "424242")
+	if err != nil || en.Alias != "Prod DB" || en.Password != "real-pw" {
+		t.Fatalf("existing entry changed by a preset: %+v %v", en, err)
+	}
+	// A new entry is still added.
+	e.mustDo("POST", "/api/sysinfo", `{"id":"434343","uuid":"Yg==","preset-address-book-name":"Servers",
+		"preset-address-book-alias":"New box"}`, "", 200)
+	if en, err := e.st.AddressBooks.GetEntry(ctx, book.ID, "434343"); err != nil || en.Alias != "New box" {
+		t.Fatalf("new entry %+v %v", en, err)
+	}
+
+	// Off: none of them apply.
+	e.deps.Config.Clients.SysinfoPresets = false
+	bob := e.user("bob", "pw-bob-12345", nil)
+	g := &store.DeviceGroup{Name: "Kiosks"}
+	_ = e.st.DeviceGroups.Create(ctx, g)
+	e.mustDo("POST", "/api/sysinfo", `{"id":"454545","uuid":"Yw==","preset-user-name":"bob","preset-device-group-name":"Kiosks",
+		"preset-note":"n","preset-address-book-name":"Servers"}`, "", 200)
+	d, _ = e.st.Devices.GetByRustdeskID(ctx, "454545")
+	if d.OwnerUserID != nil || d.DeviceGroupID != nil || d.Note != "" {
+		t.Fatalf("presets applied while off: %+v (bob %d)", d, bob.ID)
+	}
+	if _, err := e.st.AddressBooks.GetEntry(ctx, book.ID, "454545"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("address book preset applied while off: %v", err)
+	}
+}
+
+// A device that really got a new uuid (reinstalled OS, same RustDesk ID)
+// comes back when its owner, or an admin, signs in on it: a password is the
+// proof an anonymous sysinfo cannot give.
+func TestLoginAdoptsNewUUIDForOwnerOrAdmin(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	owner := e.user("own", "pw-own-12345", nil)
+	e.user("other", "pw-other-12345", nil)
+	e.user("adm", "pw-adm-12345", func(u *store.User) { u.Role = store.RoleAdmin })
+	e.mustDo("POST", "/api/sysinfo", `{"id":"246810","uuid":"b2xk"}`, "", 200)
+	e.login("own", "pw-own-12345", "246810", "b2xk")
+
+	// After the reinstall: sysinfo with the new uuid is refused...
+	e.mustDo("POST", "/api/sysinfo", `{"id":"246810","uuid":"bmV3"}`, "", 403)
+	// ...someone else signing in on it changes nothing...
+	e.login("other", "pw-other-12345", "246810", "bmV3")
+	d, _ := e.st.Devices.GetByRustdeskID(ctx, "246810")
+	if d.UUID != "b2xk" || d.OwnerUserID == nil || *d.OwnerUserID != owner.ID {
+		t.Fatalf("another user's login moved the device: %+v", d)
+	}
+	// ...the owner signing in adopts the new uuid, and sysinfo works again.
+	e.login("own", "pw-own-12345", "246810", "bmV3")
+	d, _ = e.st.Devices.GetByRustdeskID(ctx, "246810")
+	if d.UUID != "bmV3" || *d.OwnerUserID != owner.ID {
+		t.Fatalf("owner login: %+v", d)
+	}
+	e.mustDo("POST", "/api/sysinfo", `{"id":"246810","uuid":"bmV3"}`, "", 200)
+
+	// Unowned: only an admin's login adopts it.
+	e.mustDo("POST", "/api/sysinfo", `{"id":"135790","uuid":"YWJj"}`, "", 200)
+	e.login("other", "pw-other-12345", "135790", "ZGVm")
+	if d, _ := e.st.Devices.GetByRustdeskID(ctx, "135790"); d.UUID != "YWJj" || d.OwnerUserID != nil {
+		t.Fatalf("unowned device taken by a user's login: %+v", d)
+	}
+	e.login("adm", "pw-adm-12345", "135790", "ZGVm")
+	if d, _ := e.st.Devices.GetByRustdeskID(ctx, "135790"); d.UUID != "ZGVm" {
+		t.Fatalf("admin login did not adopt the uuid: %+v", d)
 	}
 }

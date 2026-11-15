@@ -41,9 +41,19 @@ The one callback serves both the panel and the RustDesk client.
 | Scopes | `openid profile email` |
 | PKCE | on, `S256` |
 | Auto-register | create a panel user on first sign-in; leave off to allow only linked accounts |
-| Link by verified e-mail | link to an existing user with the same address, **only** if the provider sends `email_verified: true` |
+| Link by verified e-mail | link to an existing user with the same address, **only** if the provider sends `email_verified: true` and the address is verified in the panel too (by the user, or an admin on the user) |
 
 **Test** checks discovery and the client credentials.
+
+### Signing in the RustDesk client
+
+After the provider, the browser shows a confirmation page naming the device that asked
+(name, OS, RustDesk ID) and the account; the client gets its token only after **Sign in**
+there. Accounts with TOTP enter their code on the same page. Accounts that must enter a
+code sent by e-mail cannot sign the client in through a provider: they sign in with their
+password in RustDesk. Without this step, a link to the real provider sent to someone with
+an SSO session signed them in on the sender's device, and the panel's second factor was
+never asked for.
 
 ### Linking existing accounts
 

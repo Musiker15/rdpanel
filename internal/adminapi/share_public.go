@@ -22,6 +22,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -141,7 +142,7 @@ func validShareToken(s string) bool {
 // the HTTP status to answer instead: 404 (unknown token, counted towards the
 // caller's backoff), 429 (backoff) or 500.
 func (h *sharePublic) lookup(r *http.Request) (*store.ServerShareLink, store.ShareLinkStatus, int, time.Duration) {
-	key := shareLimitKey + httpx.ClientIPString(r)
+	key := shareLimitKey + httpx.ClientIPKey(r)
 	if h.d.Limiter != nil {
 		if ok, wait := h.d.Limiter.Allow(key); !ok {
 			return nil, "", http.StatusTooManyRequests, wait
@@ -313,8 +314,7 @@ func (h *sharePublic) windows(w http.ResponseWriter, r *http.Request) {
 		internalError(w)
 		return
 	}
-	rng := strings.TrimSpace(r.Header.Get("Range"))
-	if rng == "" || strings.HasPrefix(rng, "bytes=0-") {
+	if rangeFromStart(r.Header.Get("Range"), fi.Size()) {
 		taken, err := h.d.Store.ServerShareLinks.TakeDownload(ctx, l.ID)
 		if err != nil {
 			h.log.ErrorContext(ctx, "share link download", slog.Any("err", err))
@@ -360,4 +360,34 @@ func (h *sharePublic) serveStatic(w http.ResponseWriter, r *http.Request, name, 
 	}
 	w.Header().Set("Cache-Control", cache)
 	http.ServeContent(w, r, st.Name(), time.Time{}, rs)
+}
+
+// rangeFromStart reports whether a request with this Range header gets the
+// start of the file, which is what counts as a download: no header, one that
+// http.ServeContent ignores (the whole file), or any range that includes byte
+// 0 ("bytes=0-", "bytes=00-", a suffix as long as the file, one of several).
+// Only a resumed download, whose ranges all start later, is not counted.
+func rangeFromStart(header string, size int64) bool {
+	spec, ok := strings.CutPrefix(strings.TrimSpace(header), "bytes=")
+	if !ok || strings.TrimSpace(spec) == "" {
+		return true
+	}
+	for _, part := range strings.Split(spec, ",") {
+		first, last, ok := strings.Cut(strings.TrimSpace(part), "-")
+		if !ok {
+			return true
+		}
+		first, last = strings.TrimSpace(first), strings.TrimSpace(last)
+		if first == "" {
+			n, err := strconv.ParseInt(last, 10, 64)
+			if err != nil || n >= size {
+				return true
+			}
+			continue
+		}
+		if n, err := strconv.ParseInt(first, 10, 64); err != nil || n <= 0 {
+			return true
+		}
+	}
+	return false
 }

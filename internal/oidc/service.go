@@ -94,6 +94,12 @@ type Options struct {
 	// GitHub overrides the GitHub endpoints (tests); GoogleIssuer the Google issuer.
 	GitHub       *GitHubEndpoints
 	GoogleIssuer string
+	// SecondFactor is asked for on the confirmation page of a client sign-in
+	// when the user has TOTP; EmailFactor refuses client sign-ins of users
+	// who must enter an e-mailed code. Limiter bounds code attempts.
+	SecondFactor SecondFactor
+	EmailFactor  EmailFactorFunc
+	Limiter      auth.Limiter
 }
 
 // Service runs OAuth/OIDC flows. Safe for concurrent use.
@@ -116,6 +122,10 @@ type Service struct {
 	github        GitHubEndpoints
 	googleIssuer  string
 	cache         *cache
+	// second factor of client sign-ins (confirm.go)
+	secondFactor SecondFactor
+	emailFactor  EmailFactorFunc
+	limiter      auth.Limiter
 }
 
 // NewService builds a Service.
@@ -127,6 +137,7 @@ func NewService(o Options) *Service {
 		tokenLifetime: o.TokenLifetime, jwtLifetime: o.JWTLifetime, stateTTL: o.StateTTL,
 		hc: o.HTTPClient, secure: o.SecureCookies, webLogin: o.WebLogin, onClientLogin: o.OnClientLogin,
 		events: o.LoginEvents, telemetry: o.Telemetry, github: DefaultGitHub, googleIssuer: GoogleIssuer, cache: newCache(),
+		secondFactor: o.SecondFactor, emailFactor: o.EmailFactor, limiter: o.Limiter,
 	}
 	if s.log == nil {
 		s.log = slog.New(slog.NewTextHandler(io.Discard, nil))

@@ -12,7 +12,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bropines/rdpanel/internal/auth"
 	"github.com/bropines/rdpanel/internal/httpx"
+	"github.com/bropines/rdpanel/internal/loginlog"
 	"github.com/bropines/rdpanel/internal/mailauth"
 	"github.com/bropines/rdpanel/internal/metrics"
 	"github.com/bropines/rdpanel/internal/store"
@@ -71,8 +73,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid request")
 		return
 	}
-	ip := httpx.ClientIPString(r)
-	ipKey := "clientapi.login.ip:" + ip
+	ipKey := "clientapi.login.ip:" + httpx.ClientIPKey(r)
 	userKey := "clientapi.login.user:" + strings.ToLower(strings.TrimSpace(req.Username))
 	// factor is the step this request performs (metrics label).
 	factor := metrics.MethodPassword
@@ -81,6 +82,11 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, k := range []string{ipKey, userKey} {
 		if ok, wait := h.Limiter.Allow(k); !ok {
+			// The per-name backoff does not apply on a network the user signed
+			// in from lately, so nobody can keep a known login name locked.
+			if k == userKey && h.knownNetwork(r, req.Username) {
+				continue
+			}
 			h.Telemetry.Login(metrics.SurfaceClient, factor, metrics.ResultRateLimited)
 			secs := int(math.Ceil(wait.Seconds()))
 			w.Header().Set("Retry-After", fmt.Sprint(secs))
@@ -182,6 +188,16 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 			fail(u, "disabled", "User is disabled")
 			return
 		}
+		// Counted before the check, per user and shared with the panel: the
+		// backoff above only sees failures already recorded, and its user key
+		// comes from the name in the request.
+		if ok, wait := auth.ReserveSecondFactor(h.Limiter, u.ID); !ok {
+			h.Telemetry.Login(metrics.SurfaceClient, factor, metrics.ResultRateLimited)
+			secs := int(math.Ceil(wait.Seconds()))
+			w.Header().Set("Retry-After", fmt.Sprint(secs))
+			writeError(w, http.StatusTooManyRequests, fmt.Sprintf("Too many failed attempts, try again in %d s", secs))
+			return
+		}
 		code := req.TfaCode
 		if code == "" {
 			code = req.VerificationCode
@@ -206,6 +222,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 			fail(u, reason, "Invalid verification code")
 			return
 		}
+		auth.ReleaseSecondFactor(h.Limiter, u.ID)
 	default:
 		writeError(w, http.StatusBadRequest, "Unsupported login type")
 		return
@@ -372,4 +389,11 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeEmpty(w)
+}
+
+// knownNetwork reports whether the user named username signed in from the
+// client's network lately (loginlog.KnownNetwork).
+func (h *handler) knownNetwork(r *http.Request, username string) bool {
+	u, err := h.st.Users.GetByUsername(r.Context(), strings.TrimSpace(username))
+	return err == nil && loginlog.KnownNetwork(r.Context(), h.st, u, r)
 }

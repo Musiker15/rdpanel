@@ -80,6 +80,8 @@ type Config struct {
 	ClientDownloads ClientDownloadsConfig `yaml:"client_downloads"`
 	// ShareLinks configures public server share links (/s/<token>).
 	ShareLinks ShareLinksConfig `yaml:"share_links"`
+	// Clients configures how the RustDesk client API treats devices.
+	Clients ClientsConfig `yaml:"clients"`
 }
 
 // ShareLinksConfig controls public server share links: pages at
@@ -90,6 +92,15 @@ type ShareLinksConfig struct {
 	// Enabled serves /s/* and lets admins (and user groups an admin allows)
 	// create links.
 	Enabled bool `yaml:"enabled"`
+}
+
+// ClientsConfig configures how the RustDesk client API treats devices.
+type ClientsConfig struct {
+	// SysinfoPresets applies the preset-* fields a client sends with its first
+	// sysinfo (owner, device group, note, address book entry). Clients send
+	// them without signing in, so anyone who can reach the client API can
+	// set them for a new device; off ignores them.
+	SysinfoPresets bool `yaml:"sysinfo_presets"`
 }
 
 // ClientDownloadsConfig configures the "Install client" page: the official
@@ -361,6 +372,7 @@ func Defaults() *Config {
 		UpdateCheck:     true,
 		APIDocs:         APIDocsAuth,
 		WebClient:       WebClientConfig{Enabled: true},
+		Clients:         ClientsConfig{SysinfoPresets: true},
 		ClientDownloads: ClientDownloadsConfig{Enabled: true},
 		Auth: AuthConfig{
 			TokenLifetime:   4380 * time.Hour,
@@ -555,6 +567,7 @@ func (c *Config) envVars() []envVar {
 		{"RDPANEL_CLIENT_DOWNLOADS_ENABLED", boolean(&c.ClientDownloads.Enabled)},
 		{"RDPANEL_CLIENT_DOWNLOADS_VERSION", str(&c.ClientDownloads.Version)},
 		{"RDPANEL_SHARE_LINKS_ENABLED", boolean(&c.ShareLinks.Enabled)},
+		{"RDPANEL_CLIENTS_SYSINFO_PRESETS", boolean(&c.Clients.SysinfoPresets)},
 		{"RDPANEL_FEDERATION_ENABLED", boolean(&c.Federation.Enabled)},
 		{"RDPANEL_FEDERATION_TOKEN", sec(&c.Federation.Token)},
 	}

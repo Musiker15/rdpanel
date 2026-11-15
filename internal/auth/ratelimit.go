@@ -47,6 +47,8 @@ type Backoff struct {
 	now     func() time.Time
 	mu      sync.Mutex
 	entries map[string]*backoffEntry
+	// attempts are the reserved attempts per key (AttemptReserver).
+	attempts map[string][]time.Time
 }
 
 var _ Limiter = (*Backoff)(nil)
@@ -134,6 +136,7 @@ func (b *Backoff) Prune() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	now := b.now()
+	b.pruneAttempts(now, b.cfg.Forget)
 	for k, e := range b.entries {
 		if now.Sub(e.lastFailure) > b.cfg.Forget && !now.Before(e.lockedUntil) {
 			delete(b.entries, k)

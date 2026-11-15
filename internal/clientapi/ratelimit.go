@@ -66,7 +66,7 @@ func (l *rateLimiter) allow(key string) bool {
 // are 429, which audit uploads treat as retryable.
 func (h *handler) deviceGate(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !h.devRate.allow(httpx.ClientIPString(r)) {
+		if !h.devRate.allow(httpx.ClientIPKey(r)) {
 			w.Header().Set("Retry-After", "1")
 			writeError(w, http.StatusTooManyRequests, "Too many requests")
 			return

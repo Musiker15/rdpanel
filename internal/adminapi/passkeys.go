@@ -242,7 +242,7 @@ func (c *authCore) handlePasskeyLoginBegin(w http.ResponseWriter, r *http.Reques
 		passkeysUnavailable(w)
 		return
 	}
-	ipKey := limitIP + httpx.ClientIPString(r)
+	ipKey := limitIP + httpx.ClientIPKey(r)
 	if ok, wait := c.allow(ipKey); !ok {
 		c.d.Telemetry.Login(metrics.SurfacePanel, metrics.MethodPasskey, metrics.ResultRateLimited)
 		rateLimited(w, wait)
@@ -279,7 +279,7 @@ func (c *authCore) handlePasskeyLoginFinish(w http.ResponseWriter, r *http.Reque
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	ipKey := limitIP + httpx.ClientIPString(r)
+	ipKey := limitIP + httpx.ClientIPKey(r)
 	if ok, wait := c.allow(ipKey); !ok {
 		c.d.Telemetry.Login(metrics.SurfacePanel, metrics.MethodPasskey, metrics.ResultRateLimited)
 		rateLimited(w, wait)
@@ -414,7 +414,7 @@ func (c *authCore) handlePasskeyMFAFinish(w http.ResponseWriter, r *http.Request
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	ipKey, uKey := limitIP+httpx.ClientIPString(r), userKey(s.User.Username)
+	ipKey, uKey := limitIP+httpx.ClientIPKey(r), userKey(s.User.Username)
 	if ok, wait := c.allow(ipKey, uKey); !ok {
 		c.d.Telemetry.Login(metrics.SurfacePanel, metrics.MethodPasskey, metrics.ResultRateLimited)
 		rateLimited(w, wait)

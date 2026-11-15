@@ -734,6 +734,13 @@ func (s *Service) ResetPassword(ctx context.Context, token, hash, algo string) (
 		if revoked, err = tx.AuthTokens.RevokeForUser(ctx, u.ID, "", "password reset by e-mail"); err != nil {
 			return err
 		}
+		// A reset is how a taken-over account is recovered: API tokens the
+		// intruder minted must not outlive it either.
+		n, err := tx.APITokens.RevokeForUser(ctx, u.ID)
+		if err != nil {
+			return err
+		}
+		revoked += n
 		user = u
 		return nil
 	})

@@ -130,3 +130,14 @@ func (r *APITokens) Revoke(ctx context.Context, id int64) error {
 	return expectOne(r.q.ExecContext(ctx, `UPDATE api_tokens SET revoked_at = coalesce(revoked_at, ?) WHERE id = ?`,
 		toMs(r.now()), id))
 }
+
+// RevokeForUser revokes every token of a user that is not revoked yet and
+// reports how many it revoked.
+func (r *APITokens) RevokeForUser(ctx context.Context, userID int64) (int64, error) {
+	res, err := r.q.ExecContext(ctx, `UPDATE api_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL`,
+		toMs(r.now()), userID)
+	if err != nil {
+		return 0, mapErr(err)
+	}
+	return res.RowsAffected()
+}

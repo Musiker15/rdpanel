@@ -40,6 +40,7 @@ type RouteDeps struct {
 //	POST /oidc/auth
 //	GET  /oidc/auth-query
 //	GET  /oidc/callback   (+ legacy alias /oauth/callback)
+//	POST /oidc/confirm    (the confirmation page of a client sign-in)
 func Register(r chi.Router, d RouteDeps) {
 	h := &clientHandlers{s: d.Service, log: d.Log}
 	if h.log == nil {
@@ -50,6 +51,7 @@ func Register(r chi.Router, d RouteDeps) {
 	r.Get("/oidc/auth-query", h.authQuery)
 	r.Get("/oidc/callback", d.Service.HandleCallback)
 	r.Get("/oauth/callback", d.Service.HandleCallback)
+	r.Post("/oidc/confirm", d.Service.HandleConfirm)
 }
 
 type clientHandlers struct {

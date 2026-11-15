@@ -182,7 +182,8 @@
       "disabled": "This account is disabled.",
       "ambiguous": "Several accounts use this email address; ask an administrator to link your identity.",
       "already_linked": "This identity is already linked to another account, or your account already has one from this provider.",
-      "session_mismatch": "Sign-in was started in another browser or tab. Please start again."
+      "session_mismatch": "Sign-in was started in another browser or tab. Please start again.",
+      "email_unverified": "An account uses this e-mail address, but it is not verified in the panel. Sign in with your password and link the identity on your profile, or ask an administrator to verify the address."
     },
     "passkey": "Sign in with a passkey",
     "usePasskey": "Use a passkey instead",
