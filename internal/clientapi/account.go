@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bropines/rdpanel/internal/auth"
 	"github.com/bropines/rdpanel/internal/httpx"
 	"github.com/bropines/rdpanel/internal/mailauth"
 	"github.com/bropines/rdpanel/internal/metrics"
@@ -182,6 +183,16 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 			fail(u, "disabled", "User is disabled")
 			return
 		}
+		// Counted before the check, per user and shared with the panel: the
+		// backoff above only sees failures already recorded, and its user key
+		// comes from the name in the request.
+		if ok, wait := auth.ReserveSecondFactor(h.Limiter, u.ID); !ok {
+			h.Telemetry.Login(metrics.SurfaceClient, factor, metrics.ResultRateLimited)
+			secs := int(math.Ceil(wait.Seconds()))
+			w.Header().Set("Retry-After", fmt.Sprint(secs))
+			writeError(w, http.StatusTooManyRequests, fmt.Sprintf("Too many failed attempts, try again in %d s", secs))
+			return
+		}
 		code := req.TfaCode
 		if code == "" {
 			code = req.VerificationCode
@@ -206,6 +217,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 			fail(u, reason, "Invalid verification code")
 			return
 		}
+		auth.ReleaseSecondFactor(h.Limiter, u.ID)
 	default:
 		writeError(w, http.StatusBadRequest, "Unsupported login type")
 		return

@@ -385,6 +385,14 @@ func (c *authCore) handleMFA(w http.ResponseWriter, r *http.Request) {
 		rateLimited(w, wait)
 		return
 	}
+	// Counted before the check, per user and shared with the client API: the
+	// backoff above only sees failures already recorded, so a parallel burst
+	// of codes would all get through it.
+	if ok, wait := auth.ReserveSecondFactor(c.limiter, s.User.ID); !ok {
+		c.d.Telemetry.Login(metrics.SurfacePanel, metrics.MethodTOTP, metrics.ResultRateLimited)
+		rateLimited(w, wait)
+		return
+	}
 	// The pending login owes TOTP when enrolled, otherwise an e-mailed code.
 	enrolled, err := c.totp.enrolled(ctx, s.User.ID)
 	if err != nil {
@@ -403,6 +411,7 @@ func (c *authCore) handleMFA(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusUnauthorized, "code_invalid", "invalid or expired code")
 			return
 		}
+		auth.ReleaseSecondFactor(c.limiter, s.User.ID)
 		c.completeLogin(w, r, s.User, loginlog.MethodPassword, metrics.MethodEmail, ipKey, uKey)
 		return
 	}
@@ -419,6 +428,7 @@ func (c *authCore) handleMFA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// sess.create revokes the pending session (rotation).
+	auth.ReleaseSecondFactor(c.limiter, s.User.ID)
 	c.completeLogin(w, r, s.User, loginlog.MethodPassword, metrics.MethodTOTP, ipKey, uKey)
 }
 
