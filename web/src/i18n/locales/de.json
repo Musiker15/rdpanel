@@ -348,6 +348,9 @@
     "sysinfo": "System",
     "recentConnections": "Letzte Verbindungen",
     "noConnections": "Keine Verbindungen aufgezeichnet.",
+    "relaySessions": "Relay-Sitzungen",
+    "relaySessionsEmpty": "Von der Adresse dieses Geräts ist keine Sitzung über ein Relay bekannt. hbbr meldet je Sitzung nur einen Endpunkt, und direkte Verbindungen (P2P) laufen nicht über ein Relay.",
+    "relaySessionsShared": "Zuordnung über die IP-Adresse: Andere Geräte hinter derselben Adresse werden mit der Sitzung aufgeführt.",
     "inBooks": "In Adressbüchern",
     "searchPlaceholder": "ID, Name, IP suchen…",
     "seenWithin": "Gesehen",
@@ -1504,6 +1507,19 @@
       "stepAutoApproved": "Freigegeben (keine Freigabe erforderlich)",
       "stepConnected": "Agent verbunden",
       "stepProbe": "End-to-End-Prüfung erfolgreich"
+    },
+    "live": {
+      "title": "Aktive Relay-Sitzungen",
+      "hint": "Sitzungen, die gerade über eines der Relays laufen. hbbr meldet je Sitzung einen Endpunkt; direkte Verbindungen (P2P) laufen nicht über ein Relay und erscheinen hier nicht.",
+      "empty": "Gerade keine Sitzungen über ein Relay",
+      "peer": "Gegenstelle",
+      "relay": "Relay",
+      "unavailable": "Keine Live-Daten von: {{relays}}",
+      "reason": {
+        "no_live_usage": "keine Live-Daten",
+        "error": "Fehler"
+      },
+      "devicesHint": "Geräte, die in den letzten 10 Minuten unter dieser IP gesehen wurden. Geräte hinter demselben NAT teilen sich eine Adresse."
     },
     "drawer": {
       "settings": "Relay",
