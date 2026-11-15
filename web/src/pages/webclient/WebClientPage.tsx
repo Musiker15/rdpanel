@@ -10,6 +10,7 @@ import { webClientApi, type WebClientConfig, type WebClientCredentials } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { takeConnectIntent } from "./connectIntent";
 import { ServerPicker } from "./ServerPicker";
 import { loadSelectedServer, relayUrlOf, saveSelectedServer, type OtherServer } from "./servers";
 
@@ -45,12 +46,15 @@ export function WebClientPage() {
     migrateStorage(RDPANEL_STORAGE_KEY);
   }, []);
 
-  // Auto-connect when opened with ?id= (from a device's drawer): our own server.
+  // Auto-connect when opened with ?id= from a device's drawer (our own server).
+  // A link from anywhere else only fills in the ID: starting a session to a
+  // device someone else picked takes a click (connectIntent.ts).
   const autoStarted = useRef(false);
   useEffect(() => {
     if (autoStarted.current || !config.data?.enabled || !search.id) return;
     autoStarted.current = true;
-    setActive({ id: search.id.replace(/\s+/g, ""), attempt: 0, server: null, mode: search.mode });
+    const id = search.id.replace(/\s+/g, "");
+    if (takeConnectIntent(id)) setActive({ id, attempt: 0, server: null, mode: search.mode });
   }, [config.data, search.id, search.mode]);
 
   const leave = useCallback(() => {

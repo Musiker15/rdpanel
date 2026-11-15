@@ -28,6 +28,7 @@ import { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHea
 import { formatDuration, formatRustdeskId, userLabel } from "@/lib/format";
 import { DeviceBulkDialog } from "@/pages/devices/dialogs";
 import { DEVICE_IP_FRESHNESS_MS, formatElapsed, peerAddress, RelayPeer } from "@/pages/server/RelayPeer";
+import { markConnectIntent } from "@/pages/webclient/connectIntent";
 
 export function OsIcon({ family, className }: { family: Schemas["OsFamily"] | undefined; className?: string }) {
   const Icon =
@@ -311,6 +312,7 @@ export function DeviceDrawer({
                       e.preventDefault();
                       e.stopPropagation();
                       const url = `/connect?id=${encodeURIComponent(d.rustdesk_id)}${mode ? `&mode=${mode}` : ""}`;
+                      markConnectIntent(d.rustdesk_id);
                       const win = window.open(url, "_blank");
                       if (!win) {
                         window.location.href = url;
