@@ -228,6 +228,9 @@ func (ti *TokenIssuer) issue(ctx context.Context, u *store.User, lc LoginContext
 		}); err != nil {
 			return err
 		}
+		if err := adoptNewUUID(ctx, tx, lc, u); err != nil {
+			return err
+		}
 		if _, err := tx.Devices.BindOwner(ctx, lc.DeviceID, lc.DeviceUUID, u.ID); err != nil {
 			return err
 		}
@@ -295,4 +298,27 @@ func (h *handler) requireAdminToken(r *http.Request) (*session, error) {
 		return nil, errUnauthorized
 	}
 	return s, nil
+}
+
+// adoptNewUUID takes the uuid a login reports for a known device when it
+// differs from the stored one and the user signing in owns the device or is
+// an admin: their password (or OIDC sign-in) is the proof an anonymous
+// sysinfo cannot give. That is how a device that really got a new uuid (a
+// reinstalled OS keeps its RustDesk ID) comes back without being deleted in
+// the panel; its next sysinfo then matches.
+func adoptNewUUID(ctx context.Context, tx *store.Store, lc LoginContext, u *store.User) error {
+	if lc.DeviceID == "" || lc.DeviceUUID == "" {
+		return nil
+	}
+	d, err := tx.Devices.GetByRustdeskID(ctx, lc.DeviceID)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if d.UUID == "" || d.UUID == lc.DeviceUUID || !mayChangeUUID(d, u) {
+		return nil
+	}
+	return tx.Devices.SetIdentity(ctx, d.ID, clip(lc.DeviceUUID, maxUUIDLen), nil)
 }

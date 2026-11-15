@@ -176,8 +176,8 @@ func (h *handler) sysinfo(w http.ResponseWriter, r *http.Request) {
 		// whether or not the device has an owner: anyone may call sysinfo, and a
 		// replaced uuid let them bind an unowned device to themselves at the
 		// next login and cut the real device off from kicks and strategies. A
-		// device that really got a new uuid (reinstalled OS) is deleted in the
-		// panel and registers afresh.
+		// device that really got a new uuid (reinstalled OS) comes back when its
+		// owner or an admin signs in on it (adoptNewUUID).
 		if d.UUID != "" && d.UUID != req.UUID && !mayChangeUUID(d, bearer) {
 			return errUUIDMismatch
 		}

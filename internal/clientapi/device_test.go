@@ -288,3 +288,43 @@ func TestSysinfoPresetsAreLimited(t *testing.T) {
 		t.Fatalf("address book preset applied while off: %v", err)
 	}
 }
+
+// A device that really got a new uuid (reinstalled OS, same RustDesk ID)
+// comes back when its owner, or an admin, signs in on it: a password is the
+// proof an anonymous sysinfo cannot give.
+func TestLoginAdoptsNewUUIDForOwnerOrAdmin(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	owner := e.user("own", "pw-own-12345", nil)
+	e.user("other", "pw-other-12345", nil)
+	e.user("adm", "pw-adm-12345", func(u *store.User) { u.Role = store.RoleAdmin })
+	e.mustDo("POST", "/api/sysinfo", `{"id":"246810","uuid":"b2xk"}`, "", 200)
+	e.login("own", "pw-own-12345", "246810", "b2xk")
+
+	// After the reinstall: sysinfo with the new uuid is refused...
+	e.mustDo("POST", "/api/sysinfo", `{"id":"246810","uuid":"bmV3"}`, "", 403)
+	// ...someone else signing in on it changes nothing...
+	e.login("other", "pw-other-12345", "246810", "bmV3")
+	d, _ := e.st.Devices.GetByRustdeskID(ctx, "246810")
+	if d.UUID != "b2xk" || d.OwnerUserID == nil || *d.OwnerUserID != owner.ID {
+		t.Fatalf("another user's login moved the device: %+v", d)
+	}
+	// ...the owner signing in adopts the new uuid, and sysinfo works again.
+	e.login("own", "pw-own-12345", "246810", "bmV3")
+	d, _ = e.st.Devices.GetByRustdeskID(ctx, "246810")
+	if d.UUID != "bmV3" || *d.OwnerUserID != owner.ID {
+		t.Fatalf("owner login: %+v", d)
+	}
+	e.mustDo("POST", "/api/sysinfo", `{"id":"246810","uuid":"bmV3"}`, "", 200)
+
+	// Unowned: only an admin's login adopts it.
+	e.mustDo("POST", "/api/sysinfo", `{"id":"135790","uuid":"YWJj"}`, "", 200)
+	e.login("other", "pw-other-12345", "135790", "ZGVm")
+	if d, _ := e.st.Devices.GetByRustdeskID(ctx, "135790"); d.UUID != "YWJj" || d.OwnerUserID != nil {
+		t.Fatalf("unowned device taken by a user's login: %+v", d)
+	}
+	e.login("adm", "pw-adm-12345", "135790", "ZGVm")
+	if d, _ := e.st.Devices.GetByRustdeskID(ctx, "135790"); d.UUID != "ZGVm" {
+		t.Fatalf("admin login did not adopt the uuid: %+v", d)
+	}
+}
