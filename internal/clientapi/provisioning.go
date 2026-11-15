@@ -149,6 +149,9 @@ func (e assignError) Error() string { return string(e) }
 type abPreset struct {
 	Name, Tag             string
 	Alias, Password, Note *string
+	// AddOnly leaves an entry already in the book untouched (unauthenticated
+	// sysinfo presets).
+	AddOnly bool
 }
 
 // applyABPreset upserts d into the shared book named p.Name (no-op for an
@@ -168,6 +171,13 @@ func applyABPreset(ctx context.Context, tx *store.Store, d *store.Device, p abPr
 	case 1:
 	default:
 		return assignError("Address book name is ambiguous")
+	}
+	if p.AddOnly {
+		if _, err := tx.AddressBooks.GetEntry(ctx, books[0].ID, d.RustdeskID); err == nil {
+			return assignError("Already in the address book")
+		} else if !errors.Is(err, store.ErrNotFound) {
+			return err
+		}
 	}
 	patch := store.ABEntryPatch{Alias: p.Alias, Password: p.Password, Note: p.Note}
 	if p.Tag != "" {

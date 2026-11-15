@@ -157,10 +157,10 @@ func (h *handler) sysinfo(w http.ResponseWriter, r *http.Request) {
 	}
 	// The client sends no Authorization header here; a token is optional proof
 	// of ownership for uuid changes.
-	var bearerUser int64
+	var bearer *store.User
 	if r.Header.Get("Authorization") != "" {
 		if s, err := h.authenticate(r, false); err == nil {
-			bearerUser = s.user.ID
+			bearer = s.user
 		}
 	}
 	err := h.st.Tx(ctx, func(tx *store.Store) error {
@@ -171,7 +171,14 @@ func (h *handler) sysinfo(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if d.UUID != "" && d.UUID != req.UUID && d.OwnerUserID != nil && *d.OwnerUserID != bearerUser {
+		// The stored uuid is what proves a later login or heartbeat comes from
+		// this device, so only the owner's or an admin's token may change it,
+		// whether or not the device has an owner: anyone may call sysinfo, and a
+		// replaced uuid let them bind an unowned device to themselves at the
+		// next login and cut the real device off from kicks and strategies. A
+		// device that really got a new uuid (reinstalled OS) is deleted in the
+		// panel and registers afresh.
+		if d.UUID != "" && d.UUID != req.UUID && !mayChangeUUID(d, bearer) {
 			return errUUIDMismatch
 		}
 		first := d.SysinfoAt == nil
@@ -233,11 +240,22 @@ func (h *handler) applyPresets(ctx context.Context, tx *store.Store, d *store.De
 			return err
 		}
 	}
+	// The preset-* fields come without a sign-in: anyone who reaches the
+	// client API can send them for a new device.
+	if !h.sysinfoPresets() {
+		return nil
+	}
 	if d.OwnerUserID == nil && strings.TrimSpace(req.PresetUserName) != "" {
 		u, err := tx.Users.GetByUsername(ctx, strings.TrimSpace(req.PresetUserName))
-		if err == nil && u.IsActive() {
+		switch {
+		case err == nil && u.IsAdmin():
+			// An admin owner puts a device in front of the people who can
+			// reach every other one; an admin assigns that (--assign, panel).
+			h.log.InfoContext(ctx, "sysinfo: preset-user-name names an admin, not applied",
+				slog.String("id", req.ID))
+		case err == nil && u.IsActive():
 			d.OwnerUserID = &u.ID
-		} else if err != nil && !errors.Is(err, store.ErrNotFound) {
+		case err != nil && !errors.Is(err, store.ErrNotFound):
 			return err
 		}
 	}
@@ -260,9 +278,14 @@ func (h *handler) applyPresets(ctx context.Context, tx *store.Store, d *store.De
 }
 
 // applyABPresetFromSysinfo applies preset-address-book-*; a missing or
-// ambiguous book is logged and skipped (the device is still registered).
+// ambiguous book is logged and skipped (the device is still registered). It
+// only adds an entry: one already in the book (alias, password, tags) is left
+// as it is, since the request carries no sign-in.
 func (h *handler) applyABPresetFromSysinfo(ctx context.Context, tx *store.Store, d *store.Device, req *sysinfoRequest) error {
-	p := abPreset{Name: req.PresetABName, Tag: req.PresetABTag}
+	if !h.sysinfoPresets() {
+		return nil
+	}
+	p := abPreset{Name: req.PresetABName, Tag: req.PresetABTag, AddOnly: true}
 	if req.PresetABAlias != "" {
 		p.Alias = &req.PresetABAlias
 	}
@@ -286,4 +309,19 @@ func (h *handler) applyABPresetFromSysinfo(ctx context.Context, tx *store.Store,
 // version string; it changes on restart so clients re-upload sysinfo.
 func (h *handler) sysinfoVer(w http.ResponseWriter, _ *http.Request) {
 	writeText(w, http.StatusOK, fmt.Sprintf("%s\n%d", buildinfo.Version, h.startedAt.Unix()))
+}
+
+// sysinfoPresets reports whether preset-* fields of a sysinfo apply
+// (clients.sysinfo_presets, on by default).
+func (h *handler) sysinfoPresets() bool {
+	return h.Config == nil || h.Config.Clients.SysinfoPresets
+}
+
+// mayChangeUUID reports whether the sysinfo caller, authenticated as bearer
+// (nil: anonymous), may replace the stored uuid of d.
+func mayChangeUUID(d *store.Device, bearer *store.User) bool {
+	if bearer == nil {
+		return false
+	}
+	return bearer.IsAdmin() || (d.OwnerUserID != nil && *d.OwnerUserID == bearer.ID)
 }
