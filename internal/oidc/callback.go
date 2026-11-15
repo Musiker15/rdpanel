@@ -423,12 +423,7 @@ func (s *Service) finishLogin(w http.ResponseWriter, r *http.Request, st *store.
 		s.webLogin(w, r, user, SafeRedirectPath(st.RedirectPath, "/"))
 		return
 	}
-	if err := s.st.OAuthStates.Complete(ctx, st.ID, &user.ID, ""); err != nil {
-		s.page(w, r, http.StatusBadRequest, errExpired.Msg)
-		return
-	}
-	s.log.InfoContext(ctx, "oidc client login approved", slog.String("provider", prov.Slug), slog.Int64("user_id", user.ID))
-	s.page(w, r, http.StatusOK, "")
+	s.askClientConfirmation(w, r, st, prov, user)
 }
 
 // LoginErrorPath is the SPA route panel OIDC failures redirect to.

@@ -126,6 +126,12 @@ func (r *OAuthStates) GetActive(ctx context.Context, hash []byte) (*OAuthState, 
 		WHERE state_sha256 = ? AND consumed_at IS NULL AND expires_at > ?`, hash, toMs(r.now())))
 }
 
+// GetActiveByID returns the unconsumed, unexpired state with id.
+func (r *OAuthStates) GetActiveByID(ctx context.Context, id int64) (*OAuthState, error) {
+	return scanOAuthState(r.q.QueryRowContext(ctx, `SELECT `+oauthStateColumns+` FROM oauth_states
+		WHERE id = ? AND consumed_at IS NULL AND expires_at > ?`, id, toMs(r.now())))
+}
+
 // Claim atomically marks an active state as being processed by a callback
 // (result_error = OAuthStateProcessing). It fails with ErrNotFound when the
 // state is unknown, expired, consumed or already claimed, which makes every
